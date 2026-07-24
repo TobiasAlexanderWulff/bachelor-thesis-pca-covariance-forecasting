@@ -16,3 +16,6 @@ dist/
 
 # Local Obsidian configuration
 .obsidian/
+
+# Downloaded and generated data
+data/

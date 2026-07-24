@@ -8,7 +8,7 @@ The codebase is being rebuilt from the ground up to reflect the current methodol
 
 The previous repository, `bachelor-thesis-volatility-forecasting`, remains unchanged as a reference for earlier implementations, tests, experiments, and decisions. Components from it are not transferred automatically.
 
-No domain-specific functionality has been implemented in this repository yet.
+The first model-independent data acquisition and validation components have been implemented. No return calculation, covariance estimation, PCA transformation, residual analysis, or forecasting model has been implemented yet.
 
 ## Established methodological direction
 
@@ -94,7 +94,23 @@ The repository currently contains:
 
 - a Python 3.12.13 environment managed with `uv`,
 - an installable `src` package,
+- `pandas` as the first runtime dependency,
+- a downloader for the fixed Q1 2024 Binance Spot dataset,
+- a central validator for the downloaded raw data,
 - an initial README,
 - this knowledge base.
 
-The next implementation steps should focus on model-independent foundations while the FARIMA questions remain unresolved.
+The fixed raw dataset comprises one-minute Spot klines for BTCUSDT, ETHUSDT, and BNBUSDT from January through March 2024.
+
+The validator checks:
+
+- the official SHA-256 checksums,
+- the expected ZIP and CSV structure,
+- twelve Kline columns per observation,
+- complete monthly coverage,
+- exact one-minute timestamp continuity,
+- numeric, finite, and strictly positive OHLC prices.
+
+After this central validation succeeds, subsequent pipeline stages may treat the raw input data as structurally valid. This validation establishes file integrity and suitability for the pipeline; it does not independently verify the economic accuracy of Binance market data.
+
+The next implementation step is to load and combine the validated closing-price series before calculating log returns.
