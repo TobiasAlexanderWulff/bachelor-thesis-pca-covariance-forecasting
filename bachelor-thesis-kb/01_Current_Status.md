@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-24
+Last updated: 2026-07-27
 
 ## Project phase
 
@@ -8,7 +8,32 @@ The codebase is being rebuilt from the ground up to reflect the current methodol
 
 The previous repository, `bachelor-thesis-volatility-forecasting`, remains unchanged as a reference for earlier implementations, tests, experiments, and decisions. Components from it are not transferred automatically.
 
-The model-independent data acquisition, validation, loading, and log-return calculation components have been implemented. No covariance estimation, PCA transformation, residual analysis, or forecasting model has been implemented yet.
+The model-independent data acquisition, validation, loading, log-return calculation and block covariance-estimation components have been implemented. No PCA transformation, residual analysis, or forecasting model has been implemented yet.
+
+## Covariance-matrix construction
+
+The one-minute log returns are partitioned chronologically into consecutive, non-overlapping blocks of \(m=30\) observations. For block \(i\), the sample covariance matrix is estimated as
+
+$$
+\Sigma_i
+=
+\frac{1}{m-1}
+\sum_{j=1}^{m}
+\left(r_{m(i-1)+j}-\bar{r}_i\right)
+\left(r_{m(i-1)+j}-\bar{r}_i\right)^\top,
+\qquad m=30,
+$$
+
+where
+
+$$
+\bar{r}_i
+=
+\frac{1}{m}
+\sum_{j=1}^{m} r_{m(i-1)+j}.
+$$
+
+Thus, $\Sigma_1$ uses returns 1–30, $\Sigma_2$ uses returns 31–60, and so forth. Only complete blocks are retained. Each matrix is timestamped with the final return observation in its block. No temporal scaling or annualization is applied.
 
 ## Established methodological direction
 
@@ -82,11 +107,9 @@ This replaces the representation in the initial PCA document that used the refer
 
 ## Forecasting clarification
 
-The supervisor clarified that the intended forecasting approach is FARIMA with a potentially non-integer differencing parameter $d$, rather than a random-walk forecast.
+The dominant series $\widetilde{\lambda}_{i,11}$ is to be forecast using FARIMA$(0,d,0)$, where $d$ is estimated from the data. The remaining series are initially to be forecast using autoregressive models. If this treatment is not satisfactory, FARIMA$(0,d,0)$ may also be applied to the remaining series.
 
-Clarification questions concerning the exact use of FARIMA are still awaiting a response. Therefore, no concrete FARIMA model order, estimation procedure, or implementation is currently fixed.
-
-Earlier AR and ARIMA specifications are retained only as historical context until the final forecasting specification has been clarified.
+A naive one-step-ahead forecast remains the forecasting baseline. The estimator and implementation used for the fractional differencing parameter $d$, as well as the exact autoregressive specification for the remaining series, still need to be selected and justified.
 
 ## Current implementation status
 
@@ -99,6 +122,7 @@ The repository currently contains:
 - a central validator for the downloaded raw data,
 - a loader that combines the validated Q1 2024 closing-price series,
 - a function that calculates one-minute log returns,
+- a function that estimates sample covariance matrices from consecutive, non-overlapping blocks of 30 one-minute returns,
 - an initial README,
 - this knowledge base.
 
@@ -115,4 +139,6 @@ The validator checks:
 
 After this central validation succeeds, subsequent pipeline stages may treat the raw input data as structurally valid. This validation establishes file integrity and suitability for the pipeline; it does not independently verify the economic accuracy of Binance market data.
 
-The next implementation step is to define and implement the rolling covariance-matrix estimation from the one-minute log returns.
+For the complete Q1 2024 dataset, the covariance calculation produces 4,367 matrices of dimension $3 \times 3$. The final 29 returns form an incomplete block and are therefore discarded. The resulting matrices were verified to contain only finite values, to be symmetric and positive semidefinite, and the first matrix was compared strictly against a direct calculation from the corresponding return block.
+
+The next methodological and implementation step is to define a look-ahead-safe construction of the historical reference covariance matrix and then implement its eigendecomposition to obtain the fixed reference basis $\widetilde{B}$.
