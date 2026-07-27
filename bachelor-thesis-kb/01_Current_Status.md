@@ -35,6 +35,53 @@ $$
 
 Thus, $\Sigma_1$ uses returns 1–30, $\Sigma_2$ uses returns 31–60, and so forth. Only complete blocks are retained. Each matrix is timestamped with the final return observation in its block. No temporal scaling or annualization is applied.
 
+## Fixed PCA reference basis
+
+The 4,367 covariance matrices are split chronologically into 2,183
+training matrices and 2,184 test matrices. The fixed reference
+covariance matrix is estimated exclusively from the training set as
+
+$$
+\widetilde{\Sigma}_{\mathrm{train}}
+=
+\frac{1}{N_{\mathrm{train}}}
+\sum_{i=1}^{N_{\mathrm{train}}}\Sigma_i,
+\qquad
+N_{\mathrm{train}}=2183.
+$$
+
+Its eigendecomposition is
+
+$$
+\widetilde{\Sigma}_{\mathrm{train}}
+=
+\widetilde{B}
+\widetilde{\Lambda}
+\widetilde{B}^{\top},
+$$
+
+where the eigenvalues and corresponding eigenvectors are ordered by
+decreasing eigenvalue. The resulting reference basis
+$\widetilde{B}$ remains fixed for both the training and test periods.
+
+Each covariance matrix is transformed into this reference basis as
+
+$$
+\widetilde{\Lambda}_i
+=
+\widetilde{B}^{\top}\Sigma_i\widetilde{B}.
+$$
+
+The first reference component explains approximately $75.87\%$ of the total variance represented by the training reference covariance matrix, followed by $17.53\%$ and $6.60\%$ for the second and third components.
+
+The implementation was verified by checking the orthonormality of
+$\widetilde{B}$, reconstruction of the reference covariance matrix,
+and reconstruction of all 4,367 individual covariance matrices. The
+mean transformed training matrix is diagonal up to floating-point
+rounding and its diagonal equals the ordered reference eigenvalues.
+Individual transformed covariance matrices are generally not
+diagonal.
+
 ## Established methodological direction
 
 Given a time series of covariance matrices
