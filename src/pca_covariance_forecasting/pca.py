@@ -1,4 +1,4 @@
-"""Construct the fixed PCA reference basis."""
+"""Construct PCA-based covariance approximations and their errors."""
 
 import numpy as np
 import pandas as pd
@@ -81,3 +81,149 @@ def transform_covariances_to_reference_basis(
         keys=timestamps,
         names=["timestamp", "component"],
     )
+
+
+def construct_reference_basis_approximations(
+    transformed_covariances: pd.DataFrame,
+    reference_eigenvalues: pd.Series,
+) -> pd.DataFrame:
+    components = reference_eigenvalues.index
+
+    approximations = []
+    timestamps = []
+
+    for timestamp, transformed in transformed_covariances.groupby(
+        level="timestamp",
+        sort=False,
+    ):
+        transformed = transformed.droplevel("timestamp").loc[
+            components,
+            components,
+        ]
+
+        approximation_diagonal = reference_eigenvalues.copy()
+        first_component = components[0]
+
+        approximation_diagonal.loc[first_component] = transformed.loc[
+            first_component,
+            first_component,
+        ]
+
+        approximations.append(
+            pd.DataFrame(
+                np.diag(approximation_diagonal.to_numpy()),
+                index=components,
+                columns=components,
+            )
+        )
+        timestamps.append(timestamp)
+
+    return pd.concat(
+        approximations,
+        keys=timestamps,
+        names=["timestamp", "component"],
+    )
+
+
+def transform_covariances_from_reference_basis(
+    transformed_covariances: pd.DataFrame,
+    reference_basis: pd.DataFrame,
+) -> pd.DataFrame:
+    basis = reference_basis.to_numpy()
+    components = reference_basis.columns
+
+    reconstructed_matrices = []
+    timestamps = []
+
+    for timestamp, transformed in transformed_covariances.groupby(
+        level="timestamp",
+        sort=False,
+    ):
+        transformed = transformed.droplevel("timestamp").loc[
+            components,
+            components,
+        ]
+
+        reconstructed = (
+            basis
+            @ transformed.to_numpy()
+            @ basis.T
+        )
+
+        reconstructed_matrices.append(
+            pd.DataFrame(
+                reconstructed,
+                index=reference_basis.index,
+                columns=reference_basis.index,
+            )
+        )
+        timestamps.append(timestamp)
+
+    return pd.concat(
+        reconstructed_matrices,
+        keys=timestamps,
+        names=["timestamp", "asset"],
+    )
+
+
+def compute_approximation_errors(
+    covariances: pd.DataFrame,
+    approximated_covariances: pd.DataFrame,
+) -> pd.DataFrame:
+    return covariances - approximated_covariances
+
+
+def compute_error_eigendecompositions(
+    errors: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    assets = errors.columns
+    component_names = [
+        f"error_component_{number}"
+        for number in range(1, len(assets) + 1)
+    ]
+
+    error_bases = []
+    error_eigenvalues = []
+    timestamps = []
+
+    for timestamp, error in errors.groupby(
+        level="timestamp",
+        sort=False,
+    ):
+        error = error.droplevel("timestamp").loc[
+            assets,
+            assets,
+        ]
+
+        eigenvalues, eigenvectors = np.linalg.eigh(
+            error.to_numpy()
+        )
+
+        eigenvalues = eigenvalues[::-1]
+        eigenvectors = eigenvectors[:, ::-1]
+
+        error_bases.append(
+            pd.DataFrame(
+                eigenvectors,
+                index=assets,
+                columns=component_names,
+            )
+        )
+        error_eigenvalues.append(eigenvalues)
+        timestamps.append(timestamp)
+
+    bases = pd.concat(
+        error_bases,
+        keys=timestamps,
+        names=["timestamp", "asset"],
+    )
+    eigenvalues = pd.DataFrame(
+        error_eigenvalues,
+        index=pd.Index(
+            timestamps,
+            name="timestamp",
+        ),
+        columns=component_names,
+    )
+
+    return bases, eigenvalues
