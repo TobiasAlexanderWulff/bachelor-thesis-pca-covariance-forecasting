@@ -53,11 +53,15 @@ name = "pca-covariance-forecasting"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "numpy" },
     { name = "pandas" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pandas", specifier = ">=3.0.5" }]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.5.1" },
+    { name = "pandas", specifier = ">=3.0.5" },
+]
 
 [[package]]
 name = "python-dateutil"

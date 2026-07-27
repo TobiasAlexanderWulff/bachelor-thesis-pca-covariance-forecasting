@@ -8,7 +8,7 @@ The codebase is being rebuilt from the ground up to reflect the current methodol
 
 The previous repository, `bachelor-thesis-volatility-forecasting`, remains unchanged as a reference for earlier implementations, tests, experiments, and decisions. Components from it are not transferred automatically.
 
-The first model-independent data acquisition and validation components have been implemented. No return calculation, covariance estimation, PCA transformation, residual analysis, or forecasting model has been implemented yet.
+The model-independent data acquisition, validation, loading, and log-return calculation components have been implemented. No covariance estimation, PCA transformation, residual analysis, or forecasting model has been implemented yet.
 
 ## Established methodological direction
 
@@ -97,6 +97,8 @@ The repository currently contains:
 - `pandas` as the first runtime dependency,
 - a downloader for the fixed Q1 2024 Binance Spot dataset,
 - a central validator for the downloaded raw data,
+- a loader that combines the validated Q1 2024 closing-price series,
+- a function that calculates one-minute log returns,
 - an initial README,
 - this knowledge base.
 
@@ -113,4 +115,4 @@ The validator checks:
 
 After this central validation succeeds, subsequent pipeline stages may treat the raw input data as structurally valid. This validation establishes file integrity and suitability for the pipeline; it does not independently verify the economic accuracy of Binance market data.
 
-The next implementation step is to load and combine the validated closing-price series before calculating log returns.
+The next implementation step is to define and implement the rolling covariance-matrix estimation from the one-minute log returns.
