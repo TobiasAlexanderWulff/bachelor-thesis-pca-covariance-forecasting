@@ -1,5 +1,7 @@
 """Construct PCA-based covariance approximations and their errors."""
 
+from itertools import permutations
+
 import numpy as np
 import pandas as pd
 
@@ -224,6 +226,105 @@ def compute_error_eigendecompositions(
             name="timestamp",
         ),
         columns=component_names,
+    )
+
+    return bases, eigenvalues
+
+
+def match_error_eigendecomposition(
+    previous_basis: pd.DataFrame,
+    current_basis: pd.DataFrame,
+    current_eigenvalues: pd.Series,
+) -> tuple[pd.DataFrame, pd.Series]:
+    similarities = np.abs(
+        previous_basis.to_numpy().T
+        @ current_basis.to_numpy()
+    )
+
+    component_count = previous_basis.shape[1]
+
+    best_permutation = max(
+        permutations(range(component_count)),
+        key=lambda permutation: sum(
+            similarities[previous_index, current_index]
+            for previous_index, current_index
+            in enumerate(permutation)
+        ),
+    )
+
+    matched_basis = current_basis.iloc[
+        :,
+        list(best_permutation)
+    ].copy()
+
+    matched_eigenvalues = current_eigenvalues.iloc[
+        list(best_permutation)
+    ].copy()
+
+    matched_basis.columns = previous_basis.columns
+    matched_eigenvalues.index = previous_basis.columns
+
+    for component in previous_basis.columns:
+        alignment = np.dot(
+            previous_basis[component],
+            matched_basis[component],
+        )
+
+        if alignment < 0:
+            matched_basis[component] *= -1
+
+    return matched_basis, matched_eigenvalues
+
+
+def match_error_eigendecompositions(
+    error_bases: pd.DataFrame,
+    error_eigenvalues: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    timestamps = error_eigenvalues.index
+
+    first_timestamp = timestamps[0]
+    previous_basis = error_bases.xs(
+        first_timestamp,
+        level="timestamp",
+    ).copy()
+
+    matched_bases = [previous_basis]
+    matched_eigenvalue_rows = [
+        error_eigenvalues.loc[first_timestamp].copy()
+    ]
+
+    for timestamp in timestamps[1:]:
+        current_basis = error_bases.xs(
+            timestamp,
+            level="timestamp",
+        )
+        current_eigenvalues = error_eigenvalues.loc[
+            timestamp
+        ]
+
+        matched_basis, matched_eigenvalues = (
+            match_error_eigendecomposition(
+                previous_basis,
+                current_basis,
+                current_eigenvalues,
+            )
+        )
+
+        matched_bases.append(matched_basis)
+        matched_eigenvalue_rows.append(
+            matched_eigenvalues
+        )
+
+        previous_basis = matched_basis
+
+    bases = pd.concat(
+        matched_bases,
+        keys=timestamps,
+        names=["timestamp", "asset"],
+    )
+    eigenvalues = pd.DataFrame(
+        matched_eigenvalue_rows,
+        index=timestamps,
     )
 
     return bases, eigenvalues
