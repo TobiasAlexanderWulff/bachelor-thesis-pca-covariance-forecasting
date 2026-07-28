@@ -328,3 +328,45 @@ def match_error_eigendecompositions(
     )
 
     return bases, eigenvalues
+
+
+def reconstruct_errors_from_eigendecompositions(
+    error_bases: pd.DataFrame,
+    error_eigenvalues: pd.DataFrame,
+) -> pd.DataFrame:
+    components = error_eigenvalues.columns
+
+    reconstructed_errors = []
+    timestamps = []
+
+    for timestamp in error_eigenvalues.index:
+        basis = error_bases.xs(
+            timestamp,
+            level="timestamp",
+        ).loc[:, components]
+
+        eigenvalues = error_eigenvalues.loc[
+            timestamp,
+            components,
+        ]
+
+        reconstructed = (
+            basis.to_numpy()
+            @ np.diag(eigenvalues.to_numpy())
+            @ basis.to_numpy().T
+        )
+
+        reconstructed_errors.append(
+            pd.DataFrame(
+                reconstructed,
+                index=basis.index,
+                columns=basis.index,
+            )
+        )
+        timestamps.append(timestamp)
+
+    return pd.concat(
+        reconstructed_errors,
+        keys=timestamps,
+        names=["timestamp", "asset"],
+    )
