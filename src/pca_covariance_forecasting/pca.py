@@ -416,3 +416,49 @@ def compute_consecutive_error_basis_similarities(
         ),
         columns=components,
     )
+
+
+def construct_previous_basis_error_approximations(
+    matched_error_bases: pd.DataFrame,
+    matched_error_eigenvalues: pd.DataFrame,
+) -> pd.DataFrame:
+    timestamps = matched_error_eigenvalues.index
+    components = matched_error_eigenvalues.columns
+
+    approximations = []
+    approximation_timestamps = []
+
+    for previous_timestamp, current_timestamp in zip(
+        timestamps[:-1],
+        timestamps[1:],
+    ):
+        previous_basis = matched_error_bases.xs(
+            previous_timestamp,
+            level="timestamp",
+        ).loc[:, components]
+
+        current_eigenvalues = matched_error_eigenvalues.loc[
+            current_timestamp,
+            components,
+        ]
+
+        approximation = (
+            previous_basis.to_numpy()
+            @ np.diag(current_eigenvalues.to_numpy())
+            @ previous_basis.to_numpy().T
+        )
+
+        approximations.append(
+            pd.DataFrame(
+                approximation,
+                index=previous_basis.index,
+                columns=previous_basis.index,
+            )
+        )
+        approximation_timestamps.append(current_timestamp)
+
+    return pd.concat(
+        approximations,
+        keys=approximation_timestamps,
+        names=["timestamp", "asset"],
+    )
