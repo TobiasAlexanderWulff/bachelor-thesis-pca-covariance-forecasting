@@ -370,3 +370,49 @@ def reconstruct_errors_from_eigendecompositions(
         keys=timestamps,
         names=["timestamp", "asset"],
     )
+
+
+def compute_consecutive_error_basis_similarities(
+    matched_error_bases: pd.DataFrame,
+) -> pd.DataFrame:
+    timestamps = (
+        matched_error_bases.index
+        .get_level_values("timestamp")
+        .unique()
+    )
+    components = matched_error_bases.columns
+
+    similarities = []
+
+    for previous_timestamp, current_timestamp in zip(
+        timestamps[:-1],
+        timestamps[1:],
+    ):
+        previous_basis = matched_error_bases.xs(
+            previous_timestamp,
+            level="timestamp",
+        ).loc[:, components]
+
+        current_basis = matched_error_bases.xs(
+            current_timestamp,
+            level="timestamp",
+        ).loc[
+            previous_basis.index,
+            components,
+        ]
+
+        component_similarities = np.sum(
+            previous_basis.to_numpy()
+            * current_basis.to_numpy(),
+            axis=0,
+        )
+        similarities.append(component_similarities)
+
+    return pd.DataFrame(
+        similarities,
+        index=pd.Index(
+            timestamps[1:],
+            name="timestamp",
+        ),
+        columns=components,
+    )
