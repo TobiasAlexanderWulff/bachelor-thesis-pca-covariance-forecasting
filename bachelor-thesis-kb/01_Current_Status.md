@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-27
+Last updated: 2026-07-28
 
 ## Project phase
 
@@ -8,8 +8,7 @@ The codebase is being rebuilt from the ground up to reflect the current methodol
 
 The previous repository, `bachelor-thesis-volatility-forecasting`, remains unchanged as a reference for earlier implementations, tests, experiments, and decisions. Components from it are not transferred automatically.
 
-The model-independent data acquisition, validation, loading, log-return calculation and block covariance-estimation components have been implemented. No PCA transformation, residual analysis, or forecasting model has been implemented yet.
-
+The model-independent data pipeline and the main PCA-based approximation pipeline have been implemented. This includes the look-ahead-safe training reference covariance and basis, transformation into and from the reference basis, construction of covariance approximations, calculation and eigendecomposition of the residual matrices, and sequential matching of the residual eigencomponents. No forecasting model has been implemented yet.
 ## Covariance-matrix construction
 
 The one-minute log returns are partitioned chronologically into consecutive, non-overlapping blocks of \(m=30\) observations. For block \(i\), the sample covariance matrix is estimated as
@@ -144,6 +143,33 @@ where $B_{E,i}$ contains eigenvectors of $E_i$ and $\Theta_i$ contains its eigen
 
 This replaces the representation in the initial PCA document that used the reference basis $\widetilde{B}$ for the residual decomposition. That earlier representation is not treated as the current specification.
 
+## Temporal matching of residual eigencomponents
+
+The eigendecomposition of each residual matrix is initially computed independently. Eigenvector signs and, particularly when eigenvalues change order, component positions are not temporally identifiable from these independent decompositions alone.
+
+For each transition from $i-1$ to $i$, the current eigenvectors are therefore assigned to the previous eigenvectors by maximizing the total absolute similarity
+
+$$
+\sum_k
+\left|
+b_{E,k,i-1}^{\top}b_{E,\pi(k),i}
+\right|
+$$
+
+over all component permutations $\pi$. The eigenvectors and their corresponding eigenvalues are reordered jointly. Eigenvector signs are subsequently aligned with the matched vectors from the previous time step.
+
+The first residual eigendecomposition provides the component anchor. After matching, an error-component label describes the temporally tracked continuation of its initial direction rather than the eigenvalue rank at every time step. Consequently, the matched eigenvalues are not necessarily ordered by decreasing value.
+
+Permutation and sign alignment do not alter the represented residual matrix:
+
+$$
+E_i
+=
+B_{E,i}\Theta_iB_{E,i}^{\top}.
+$$
+
+Near-equal eigenvalues remain a methodological complication because individual eigenvectors may then be poorly identifiable even when their joint eigenspace is stable.
+
 ## Open methodological questions
 
 - The exact construction of the historical reference covariance matrix and reference basis must be specified without look-ahead bias.
@@ -170,6 +196,11 @@ The repository currently contains:
 - a loader that combines the validated Q1 2024 closing-price series,
 - a function that calculates one-minute log returns,
 - a function that estimates sample covariance matrices from consecutive, non-overlapping blocks of 30 one-minute returns,
+- construction and eigendecomposition of the training reference covariance matrix,
+- transformation of covariance matrices into and from the fixed reference basis,
+- construction of covariance approximations using the dominant transformed component,
+- calculation and independent eigendecomposition of the residual matrices,
+- sequential matching and sign alignment of residual eigencomponents.
 - an initial README,
 - this knowledge base.
 
@@ -188,4 +219,4 @@ After this central validation succeeds, subsequent pipeline stages may treat the
 
 For the complete Q1 2024 dataset, the covariance calculation produces 4,367 matrices of dimension $3 \times 3$. The final 29 returns form an incomplete block and are therefore discarded. The resulting matrices were verified to contain only finite values, to be symmetric and positive semidefinite, and the first matrix was compared strictly against a direct calculation from the corresponding return block.
 
-The next methodological and implementation step is to define a look-ahead-safe construction of the historical reference covariance matrix and then implement its eigendecomposition to obtain the fixed reference basis $\widetilde{B}$.
+The next implementation step is to reconstruct the residual matrices from their matched eigenvectors and eigenvalues and verify that temporal matching preserves every original residual matrix. Afterwards, the temporal stability of the residual bases and the suitability of the previous basis as a naive one-step estimate can be investigated.
