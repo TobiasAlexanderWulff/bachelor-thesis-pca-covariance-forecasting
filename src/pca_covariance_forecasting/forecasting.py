@@ -5,6 +5,10 @@ from collections.abc import Callable
 import numpy as np
 import pandas as pd
 
+from pca_covariance_forecasting.pca import (
+    transform_covariances_from_reference_basis,
+)
+
 
 D_LOWER_BOUND = -0.49
 D_UPPER_BOUND = 0.49
@@ -461,3 +465,104 @@ def fit_and_forecast_arfima_0d0_holdout(
     )
 
     return forecasts, fitted_model
+
+
+def construct_dominant_indicator_covariance_forecasts(
+    dominant_indicator_forecasts: pd.Series,
+    reference_basis: pd.DataFrame,
+    reference_eigenvalues: pd.Series,
+) -> pd.DataFrame:
+    if dominant_indicator_forecasts.empty:
+        raise ValueError(
+            "At least one dominant-indicator forecast is required."
+        )
+
+    if not dominant_indicator_forecasts.index.is_unique:
+        raise ValueError(
+            "The forecast index must be unique."
+        )
+
+    if (
+        not dominant_indicator_forecasts
+        .index
+        .is_monotonic_increasing
+    ):
+        raise ValueError(
+            "The forecasts must be chronologically ordered."
+        )
+
+    if reference_basis.shape[0] != reference_basis.shape[1]:
+        raise ValueError(
+            "The reference basis must be square."
+        )
+
+    if not reference_basis.columns.equals(
+        reference_eigenvalues.index
+    ):
+        raise ValueError(
+            "Reference-basis components and reference "
+            "eigenvalues must have identical ordering."
+        )
+
+    forecast_values = (
+        dominant_indicator_forecasts
+        .to_numpy(dtype=float)
+    )
+
+    if not np.isfinite(forecast_values).all():
+        raise ValueError(
+            "Dominant-indicator forecasts contain "
+            "non-finite values."
+        )
+
+    if not np.isfinite(
+        reference_basis.to_numpy(dtype=float)
+    ).all():
+        raise ValueError(
+            "The reference basis contains non-finite values."
+        )
+
+    if not np.isfinite(
+        reference_eigenvalues.to_numpy(dtype=float)
+    ).all():
+        raise ValueError(
+            "Reference eigenvalues contain non-finite values."
+        )
+
+    components = reference_basis.columns
+    transformed_forecasts = []
+    timestamps = []
+
+    for timestamp, forecast_value in (
+        dominant_indicator_forecasts.items()
+    ):
+        forecast_diagonal = (
+            reference_eigenvalues.copy()
+        )
+        forecast_diagonal.iloc[0] = float(
+            forecast_value
+        )
+
+        transformed_forecasts.append(
+            pd.DataFrame(
+                np.diag(
+                    forecast_diagonal.to_numpy(
+                        dtype=float
+                    )
+                ),
+                index=components,
+                columns=components,
+            )
+        )
+        timestamps.append(timestamp)
+
+    transformed_forecasts = pd.concat(
+        transformed_forecasts,
+        keys=timestamps,
+        names=["timestamp", "component"],
+    )
+
+    return transform_covariances_from_reference_basis(
+        transformed_covariances=transformed_forecasts,
+        reference_basis=reference_basis,
+    )

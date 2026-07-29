@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from pca_covariance_forecasting.forecasting import (
+    construct_dominant_indicator_covariance_forecasts,
     fit_and_forecast_arfima_0d0_holdout,
     fit_arfima_0d0_whittle,
     forecast_arfima_0d0_one_step,
@@ -276,6 +277,144 @@ class ArfimaHoldoutWorkflowTests(unittest.TestCase):
             expected,
             rtol=0.0,
             atol=0.0,
+        )
+
+
+class DominantIndicatorCovarianceForecastTests(
+    unittest.TestCase
+):
+    def test_reconstructs_forecasts_in_reference_basis(
+        self,
+    ) -> None:
+        inverse_square_root_two = 1.0 / np.sqrt(2.0)
+
+        inverse_square_root_two = 1.0 / np.sqrt(2.0)
+
+        assets = pd.Index(
+            ["asset_1", "asset_2"],
+            name="asset",
+        )
+
+        reference_basis = pd.DataFrame(
+            [
+                [
+                    inverse_square_root_two,
+                    -inverse_square_root_two,
+                ],
+                [
+                    inverse_square_root_two,
+                    inverse_square_root_two,
+                ],
+            ],
+            index=assets,
+            columns=["component_1", "component_2"],
+        )
+        reference_eigenvalues = pd.Series(
+            [5.0, 2.0],
+            index=reference_basis.columns,
+            name="eigenvalue",
+        )
+
+        timestamps = pd.date_range(
+            "2024-02-01",
+            periods=2,
+            freq="30min",
+            name="timestamp",
+        )
+        indicator_forecasts = pd.Series(
+            [7.0, 11.0],
+            index=timestamps,
+            name="arfima_0d0_forecast",
+        )
+
+        result = (
+            construct_dominant_indicator_covariance_forecasts(
+                dominant_indicator_forecasts=(
+                    indicator_forecasts
+                ),
+                reference_basis=reference_basis,
+                reference_eigenvalues=(
+                    reference_eigenvalues
+                ),
+            )
+        )
+
+        first_expected = pd.DataFrame(
+            [
+                [4.5, 2.5],
+                [2.5, 4.5],
+            ],
+            index=reference_basis.index,
+            columns=reference_basis.index,
+        )
+        second_expected = pd.DataFrame(
+            [
+                [6.5, 4.5],
+                [4.5, 6.5],
+            ],
+            index=reference_basis.index,
+            columns=reference_basis.index,
+        )
+
+        pd.testing.assert_frame_equal(
+            result.xs(
+                timestamps[0],
+                level="timestamp",
+            ),
+            first_expected,
+        )
+        pd.testing.assert_frame_equal(
+            result.xs(
+                timestamps[1],
+                level="timestamp",
+            ),
+            second_expected,
+        )
+
+    def test_does_not_hide_negative_indicator_forecast(
+        self,
+    ) -> None:
+        reference_basis = pd.DataFrame(
+            np.eye(2),
+            index=pd.Index(
+                ["asset_1", "asset_2"],
+                name="asset",
+            ),
+            columns=["component_1", "component_2"],
+        )
+        reference_eigenvalues = pd.Series(
+            [3.0, 2.0],
+            index=reference_basis.columns,
+            name="eigenvalue",
+        )
+
+        timestamp = pd.Timestamp("2024-02-01")
+        indicator_forecasts = pd.Series(
+            [-1.0],
+            index=pd.Index(
+                [timestamp],
+                name="timestamp",
+            ),
+        )
+
+        result = (
+            construct_dominant_indicator_covariance_forecasts(
+                dominant_indicator_forecasts=(
+                    indicator_forecasts
+                ),
+                reference_basis=reference_basis,
+                reference_eigenvalues=(
+                    reference_eigenvalues
+                ),
+            )
+        )
+
+        np.testing.assert_array_equal(
+            result.xs(
+                timestamp,
+                level="timestamp",
+            ).to_numpy(),
+            np.diag([-1.0, 2.0]),
         )
 
 
