@@ -8,9 +8,12 @@ The codebase is being rebuilt from the ground up to reflect the current methodol
 
 The previous repository, `bachelor-thesis-volatility-forecasting`, remains unchanged as a reference for earlier implementations, tests, experiments, and decisions. Components from it are not transferred automatically.
 
-The model-independent data pipeline, the main PCA-based approximation pipeline, residual-basis diagnostics, and initial Frobenius-error evaluation utilities have been implemented. This includes the look-ahead-safe training reference covariance and basis, transformation into and from the reference basis, construction of covariance approximations, calculation and eigendecomposition of residual matrices, sequential matching of residual eigencomponents, reconstruction of matched residuals, consecutive basis-similarity measurements, previous-basis residual approximations, and basic Frobenius-norm evaluation.
+The model-independent data pipeline, the PCA-based approximation pipeline, residual-basis diagnostics, covariance-forecast evaluation utilities, and the primary end-to-end forecasting comparison have been implemented. This includes the look-ahead-safe training reference covariance and basis, construction of single-indicator covariance approximations, residual eigendecompositions and diagnostics, timestamp-level forecast losses, positive-semidefiniteness diagnostics, dependence-adjusted loss-difference inference, and circular block-bootstrap intervals.
 
-Forecasting models, loss-difference inference, and the final end-to-end comparison currently exist only as local exploratory analysis scripts. They have not yet been integrated into the installable package or committed as the reproducible production analysis.
+Commit `d418fc6` introduced the repository-reproducible primary forecasting analysis in `scripts/analyze_covariance_forecasts.py`. It estimates the dominant-indicator ARFIMA model using training data only and compares it against the direct naive covariance forecast and the naive dominant-indicator forecast on the fixed holdout.
+
+Forecasts of the complete residual eigendecomposition, residual-correction experiments, loss-concentration diagnostics, and additional inference sensitivity checks remain exploratory unless explicitly identified below. They must not be presented as repository-reproducible thesis evidence yet.
+
 ## Covariance-matrix construction
 
 The one-minute log returns are partitioned chronologically into consecutive, non-overlapping blocks of \(m=30\) observations. For block \(i\), the sample covariance matrix is estimated as
@@ -174,42 +177,47 @@ Near-equal eigenvalues remain a methodological complication because individual e
 
 ## Open methodological questions
 
-- The exact production implementation of ARFIMA$(0,d,0)$, including the estimator for $d$, parameter constraints, diagnostics, dependencies, and forecast recursion, must still be selected, justified from literature, integrated, and tested.
-- The direct naive covariance forecast $\widehat{\Sigma}_t=\Sigma_{t-1}$ should be retained as a strong matrix-level benchmark in addition to the naive dominant-indicator forecast.
-- Forecasting the complete residual eigendecomposition remains open. The exploratory identity-basis diagonal corrections described below do not forecast the changing residual eigenvector basis and are not equivalent to a complete residual forecast.
-- Loss-difference inference, PSD diagnostics, and concentration diagnostics must be reproduced from committed analysis code before they support final thesis claims.
+- The parametric profile Whittle estimator, admissible range of $d$, fractional forecast recursion, and associated diagnostics still require a precise literature-based presentation in the thesis.
+- Forecasting the complete residual eigendecomposition remains open. The exploratory identity-basis diagonal corrections do not forecast the changing residual eigenvector basis and are not equivalent to a complete residual forecast.
+- The earlier proposal to forecast additional series with autoregressive models belongs to an extended specification. It is not part of the committed primary one-indicator model and requires an explicit scope decision before implementation.
+- The exploratory concentration diagnostic must be reproduced from committed code before it is used as formal thesis evidence.
 - Evidence from one Q1 2024 holdout and one three-asset portfolio must not be generalized to other periods, frequencies, portfolios, or markets without further evidence.
 
-## Forecasting clarification
+## Forecasting specification
 
-The dominant series $\widetilde{\lambda}_{i,11}$ is to be forecast using FARIMA$(0,d,0)$, where $d$ is estimated from the data. The remaining series are initially to be forecast using autoregressive models. If this treatment is not satisfactory, FARIMA$(0,d,0)$ may also be applied to the remaining series.
+The committed primary candidate model forecasts only the dominant series
 
-A naive one-step-ahead forecast remains the forecasting baseline. The estimator and implementation used for the fractional differencing parameter $d$, as well as the exact autoregressive specification for the remaining series, still need to be selected and justified.
+$$
+\widetilde{\lambda}_{t,11}
+$$
 
-## Frozen exploratory forecasting result
+using ARFIMA$(0,d,0)$. Its mean, fractional differencing parameter $d$, and innovation variance are estimated exclusively from the outer training set using a parametric profile Whittle estimator. These parameter estimates remain fixed throughout the holdout. Each one-step-ahead forecast uses only observations strictly preceding its target timestamp.
 
-### Status and protocol
+The second and third diagonal values in the fixed reference basis remain equal to their training-reference eigenvalues, while the reference-basis off-diagonal values remain zero. The primary candidate therefore uses no residual correction and deliberately represents the one-indicator research design.
 
-The following results were produced on 2026-07-29 by local exploratory scripts. They guide the next implementation steps but are not yet final repository-reproducible thesis results.
+The direct naive covariance forecast
 
-The experiment used all 4,367 covariance matrices, with the first 2,183 matrices as outer training data and the remaining 2,184 matrices as a fixed outer test set. The PCA reference basis and all ARFIMA parameters were estimated only from the outer training set and then held fixed throughout the outer test. Every forecast used only observations strictly before its target timestamp.
+$$
+\widehat{\Sigma}_t=\Sigma_{t-1}
+$$
 
-The exploratory dominant-indicator model was ARFIMA$(0,d,0)$ with a parametric profile Whittle estimate
+is the primary benchmark. A naive dominant-indicator forecast is retained as an additional baseline.
 
-$
-\widehat d_{\lambda}=0.157630.
-$
+## Reproducible primary forecasting result and exploratory supplements
 
-The current empirical model preference described below is a working project decision derived from the exploratory comparison. It is not a separate decision confirmed by the supervisor.
+The primary residual-free forecasting comparison and its designated primary loss-difference inference are reproduced by the committed script `scripts/analyze_covariance_forecasts.py` introduced in commit `d418fc6`. The underlying evaluation functions are covered by the repository test suite.
+
+The experiment uses all 4,367 covariance matrices, with the first 2,183 matrices as outer training data and the remaining 2,184 matrices as a fixed outer test set. The PCA reference basis and all ARFIMA parameters are estimated only from the outer training set and then held fixed throughout the outer test. Every forecast uses only observations strictly before its target timestamp.
+
+Residual-correction results, inference sensitivity checks beyond the committed primary configuration, and the concentration analysis remain exploratory. The empirical model preference is a working project decision and has not been separately confirmed by the supervisor.
 
 ### Main covariance-forecast comparison
 
 | Method | Overall test RMSE | RMSE change versus direct naive matrix | Non-PSD forecasts |
-|---|---:|---:|---:|
+| --- | ---: | ---: | ---: |
 | Direct naive covariance, $\widehat\Sigma_t=\Sigma_{t-1}$ | $2.623096\times10^{-6}$ | $0.00\%$ | $0$ |
 | Naive dominant indicator, no residual correction | $2.495972\times10^{-6}$ | $-4.85\%$ | $0$ |
 | ARFIMA dominant indicator, no residual correction | $2.221592\times10^{-6}$ | $-15.31\%$ | $0$ |
-| ARFIMA dominant indicator plus ARFIMA diagonal residual correction | $2.210094\times10^{-6}$ | $-15.74\%$ | $65$ of $2,184$ ($2.98\%$) |
 
 Relative to the direct naive covariance forecast, the ARFIMA dominant-indicator forecast without residual correction reduced RMSE by $15.31\%$. Its diagonal RMSE decreased by $16.95\%$ and its off-diagonal RMSE by $13.33\%$. Equivalently, its mean timestamp-level squared Frobenius loss was $28.27\%$ lower:
 
@@ -255,17 +263,19 @@ $
 p_{\mathrm{HAC}}=0.1903.
 $
 
-The supplementary 95% circular block-bootstrap percentile interval for the mean loss difference was
+The supplementary 95% circular block-bootstrap percentile interval, using block length 13, 100,000 replications, and random seed 20260729, was
 
-$
-[-2.63\times10^{-14},\ 4.73\times10^{-11}],
-$
+$$
+[-1.1632\times10^{-13},\ 4.6911\times10^{-11}],
+$$
 
-which includes zero. HAC sensitivity checks over truncation lags 0, 5, 7, 10, 20, and 50 produced two-sided $p$-values between $0.147$ and $0.385$.
+which includes zero.
 
 The null hypothesis of equal expected loss was therefore not rejected at the 5% level. This does not establish equal predictive accuracy; it means that the analysis did not provide sufficient evidence of a nonzero expected loss difference under the applied inference procedures.
 
-### Concentration of the aggregate advantage
+For the supplementary off-diagonal loss, the bootstrap lower bound was only marginally above zero, while the corresponding HAC test produced $p=0.1690$. This disagreement does not support a robust supplementary significance claim.
+
+### Exploratory concentration of the aggregate advantage
 
 The ARFIMA dominant-indicator model had the smaller timestamp-level loss for 793 of 2,184 test observations, or $36.31\%$. The direct naive covariance forecast won the remaining $63.69\%$.
 
@@ -286,7 +296,7 @@ This choice does not simply select the numerically lowest unconstrained RMSE. It
 1. statistical superiority over the direct naive covariance forecast was not established at the 5% level;
 2. the aggregate advantage was highly concentrated in a few large-error events rather than being present at most timestamps.
 
-The model choice remains provisional until the forecasting and evaluation pipeline is integrated into the repository and the complete result is reproduced.
+The model is now repository-reproducible. It nevertheless remains a working project decision until the final scope and interpretation have been confirmed with the supervisor.
 
 ### Oracle interpretation
 
@@ -319,6 +329,13 @@ The repository currently contains:
 - measurement of consecutive matched residual-basis similarities,
 - residual approximation using the previous matched basis and current eigenvalues,
 - Frobenius norms, relative Frobenius errors, and aggregated relative Frobenius errors,
+- timestamp-level overall, diagonal, and off-diagonal squared Frobenius losses,
+- overall, diagonal, and off-diagonal covariance RMSE,
+- positive-semidefiniteness diagnostics,
+- Bartlett-HAC equal-accuracy tests with an automatically selected truncation lag,
+- circular block-bootstrap intervals with a deterministic random seed,
+- a committed end-to-end analysis comparing direct naive covariance, naive dominant-indicator, and ARFIMA dominant-indicator forecasts,
+- 22 passing unit tests covering the current package-level functionality,
 - an initial README,
 - this knowledge base.
 
@@ -339,9 +356,10 @@ For the complete Q1 2024 dataset, the covariance calculation produces 4,367 matr
 
 The next production implementation steps are:
 
-1. complete the evaluation module with overall, diagonal, and off-diagonal RMSE plus positive-semidefiniteness diagnostics;
-2. integrate and test the selected ARFIMA dominant-indicator workflow with training-only parameter estimation and strict one-step-ahead alignment;
-3. integrate the direct naive covariance benchmark and the pre-specified loss-difference analysis;
-4. reproduce the frozen exploratory results from committed code before using them as final thesis evidence.
+1. reproduce the committed primary analysis from a fresh checkout and clean `uv` environment;
+2. add targeted regression tests for the ARFIMA estimator, fractional forecast recursion, and strict one-step-ahead alignment in the end-to-end analysis;
+3. decide with the supervisor whether forecasting the complete residual structure remains within scope;
+4. integrate the concentration diagnostic only if it will be used as formal thesis evidence;
+5. transfer the committed methodology and primary results into thesis-ready tables, figures, and written interpretation.
 
-No additional residual-model tuning should be performed before these reproducibility steps are complete.
+No additional residual-model tuning should be performed before the residual-forecasting scope has been explicitly decided.
