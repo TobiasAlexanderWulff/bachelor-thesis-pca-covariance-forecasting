@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from pca_covariance_forecasting.forecasting import (
+    construct_direct_naive_covariance_forecasts,
     construct_dominant_indicator_covariance_forecasts,
     fit_and_forecast_arfima_0d0_holdout,
     fit_arfima_0d0_whittle,
@@ -288,8 +289,6 @@ class DominantIndicatorCovarianceForecastTests(
     ) -> None:
         inverse_square_root_two = 1.0 / np.sqrt(2.0)
 
-        inverse_square_root_two = 1.0 / np.sqrt(2.0)
-
         assets = pd.Index(
             ["asset_1", "asset_2"],
             name="asset",
@@ -416,6 +415,163 @@ class DominantIndicatorCovarianceForecastTests(
             ).to_numpy(),
             np.diag([-1.0, 2.0]),
         )
+
+
+class DirectNaiveCovarianceForecastTests(
+    unittest.TestCase
+):
+    def test_uses_previous_matrix_for_each_holdout_target(
+        self,
+    ) -> None:
+        timestamps = pd.date_range(
+            "2024-01-01",
+            periods=4,
+            freq="30min",
+            name="timestamp",
+        )
+        assets = pd.Index(
+            ["asset_1", "asset_2"],
+            name="asset",
+        )
+
+        matrices = [
+            pd.DataFrame(
+                [
+                    [value, value / 10.0],
+                    [value / 10.0, value + 1.0],
+                ],
+                index=assets,
+                columns=assets,
+            )
+            for value in [1.0, 2.0, 3.0, 4.0]
+        ]
+
+        covariance_matrices = pd.concat(
+            matrices,
+            keys=timestamps,
+            names=["timestamp", "asset"],
+        )
+
+        result = (
+            construct_direct_naive_covariance_forecasts(
+                covariance_matrices=covariance_matrices,
+                training_observation_count=2,
+            )
+        )
+
+        expected = pd.concat(
+            [matrices[1], matrices[2]],
+            keys=timestamps[2:],
+            names=["timestamp", "asset"],
+        )
+
+        pd.testing.assert_frame_equal(
+            result,
+            expected,
+        )
+
+    def test_does_not_use_current_target_matrix(
+        self,
+    ) -> None:
+        timestamps = pd.date_range(
+            "2024-01-01",
+            periods=3,
+            freq="30min",
+            name="timestamp",
+        )
+        assets = pd.Index(
+            ["asset_1", "asset_2"],
+            name="asset",
+        )
+
+        matrices = [
+            pd.DataFrame(
+                np.eye(2) * value,
+                index=assets,
+                columns=assets,
+            )
+            for value in [1.0, 2.0, 3.0]
+        ]
+
+        changed_matrices = [
+            matrix.copy()
+            for matrix in matrices
+        ]
+        changed_matrices[2] *= 1000.0
+
+        first_covariances = pd.concat(
+            matrices,
+            keys=timestamps,
+            names=["timestamp", "asset"],
+        )
+        changed_covariances = pd.concat(
+            changed_matrices,
+            keys=timestamps,
+            names=["timestamp", "asset"],
+        )
+
+        first_result = (
+            construct_direct_naive_covariance_forecasts(
+                covariance_matrices=first_covariances,
+                training_observation_count=2,
+            )
+        )
+        changed_result = (
+            construct_direct_naive_covariance_forecasts(
+                covariance_matrices=changed_covariances,
+                training_observation_count=2,
+            )
+        )
+
+        pd.testing.assert_frame_equal(
+            first_result,
+            changed_result,
+        )
+
+    def test_rejects_invalid_training_size(
+        self,
+    ) -> None:
+        timestamps = pd.date_range(
+            "2024-01-01",
+            periods=2,
+            freq="30min",
+            name="timestamp",
+        )
+        assets = pd.Index(
+            ["asset_1", "asset_2"],
+            name="asset",
+        )
+        covariance_matrices = pd.concat(
+            [
+                pd.DataFrame(
+                    np.eye(2),
+                    index=assets,
+                    columns=assets,
+                )
+                for _ in timestamps
+            ],
+            keys=timestamps,
+            names=["timestamp", "asset"],
+        )
+
+        for training_observation_count in [0, 2]:
+            with self.subTest(
+                training_observation_count=(
+                    training_observation_count
+                )
+            ):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "strictly between zero",
+                ):
+                    construct_direct_naive_covariance_forecasts(
+                        covariance_matrices=(
+                            covariance_matrices
+                        ),
+                        training_observation_count=(
+                            training_observation_count
+                        ),
+                    )
 
 
 if __name__ == "__main__":

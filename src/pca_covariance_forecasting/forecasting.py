@@ -9,7 +9,6 @@ from pca_covariance_forecasting.pca import (
     transform_covariances_from_reference_basis,
 )
 
-
 D_LOWER_BOUND = -0.49
 D_UPPER_BOUND = 0.49
 D_GRID_SIZE = 981
@@ -565,4 +564,78 @@ def construct_dominant_indicator_covariance_forecasts(
     return transform_covariances_from_reference_basis(
         transformed_covariances=transformed_forecasts,
         reference_basis=reference_basis,
+    )
+
+
+def construct_direct_naive_covariance_forecasts(
+    covariance_matrices: pd.DataFrame,
+    training_observation_count: int,
+) -> pd.DataFrame:
+    if covariance_matrices.empty:
+        raise ValueError(
+            "At least one covariance matrix is required."
+        )
+
+    if not isinstance(
+        covariance_matrices.index,
+        pd.MultiIndex,
+    ):
+        raise ValueError(  # noqa: TRY004
+            "Covariance matrices must use a MultiIndex."
+        )
+
+    if "timestamp" not in covariance_matrices.index.names:
+        raise ValueError(
+            "The covariance-matrix index must contain "
+            "a timestamp level."
+        )
+
+    timestamps = (
+        covariance_matrices.index
+        .get_level_values("timestamp")
+        .unique()
+    )
+
+    if not timestamps.is_monotonic_increasing:
+        raise ValueError(
+            "Covariance matrices must be chronologically ordered."
+        )
+
+    if not (
+        0
+        < training_observation_count
+        < len(timestamps)
+    ):
+        raise ValueError(
+            "training_observation_count must be strictly "
+            "between zero and the total number of "
+            "covariance matrices."
+        )
+
+    forecasts = []
+    forecast_timestamps = []
+
+    for target_position in range(
+        training_observation_count,
+        len(timestamps),
+    ):
+        previous_timestamp = timestamps[
+            target_position - 1
+        ]
+        target_timestamp = timestamps[
+            target_position
+        ]
+
+        previous_covariance = covariance_matrices.xs(
+            previous_timestamp,
+            level="timestamp",
+        ).copy()
+
+        forecasts.append(previous_covariance)
+        forecast_timestamps.append(target_timestamp)
+
+    return pd.concat(
+        forecasts,
+        keys=forecast_timestamps,
+        names=["timestamp", "asset"],
     )
