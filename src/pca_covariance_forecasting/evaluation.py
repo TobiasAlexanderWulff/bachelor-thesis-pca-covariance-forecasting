@@ -4,6 +4,27 @@ import numpy as np
 import pandas as pd
 
 
+def _matrix_frame_to_array(
+    matrices: pd.DataFrame,
+) -> np.ndarray:
+    assets = matrices.columns
+    timestamps = (
+        matrices.index
+        .get_level_values("timestamp")
+        .unique()
+    )
+
+    return np.stack(
+        [
+            matrices.xs(
+                timestamp,
+                level="timestamp",
+            ).loc[assets, assets].to_numpy()
+            for timestamp in timestamps
+        ]
+    )
+
+
 def compute_frobenius_norms(
     matrices: pd.DataFrame,
 ) -> pd.Series:
@@ -102,4 +123,86 @@ def compute_aggregated_relative_frobenius_error(
             squared_error_norm_sum
             / squared_covariance_norm_sum
         )
+    )
+
+
+def compute_covariance_rmse(
+    errors: pd.DataFrame,
+) -> pd.Series:
+    error_values = _matrix_frame_to_array(errors)
+    dimension = error_values.shape[1]
+
+    diagonal_positions = np.arange(dimension)
+    diagonal_errors = error_values[
+        :,
+        diagonal_positions,
+        diagonal_positions,
+    ]
+
+    off_diagonal_mask = ~np.eye(
+        dimension,
+        dtype=bool,
+    )
+    off_diagonal_errors = error_values[
+        :,
+        off_diagonal_mask,
+    ]
+
+    return pd.Series(
+        {
+            "overall": np.sqrt(
+                np.mean(np.square(error_values))
+            ),
+            "diagonal": np.sqrt(
+                np.mean(np.square(diagonal_errors))
+            ),
+            "off-diagonal": np.sqrt(
+                np.mean(np.square(off_diagonal_errors))
+            ),
+        },
+        name="rmse",
+        dtype=float,
+    )
+
+
+def compute_psd_diagnostics(
+    covariance_matrices: pd.DataFrame,
+    relative_tolerance: float = 1e-12,
+) -> pd.Series:
+    if relative_tolerance < 0.0:
+        raise ValueError(
+            "relative_tolerance must be non-negative."
+        )
+
+    covariance_values = _matrix_frame_to_array(
+        covariance_matrices,
+    )
+    eigenvalues = np.linalg.eigvalsh(covariance_values)
+    minimum_eigenvalues = eigenvalues[:, 0]
+
+    spectral_scales = np.max(
+        np.abs(eigenvalues),
+        axis=1,
+    )
+    tolerances = (
+        relative_tolerance
+        * np.maximum(
+            spectral_scales,
+            np.finfo(float).tiny,
+        )
+    )
+    non_psd = minimum_eigenvalues < -tolerances
+
+    return pd.Series(
+        {
+            "minimum_eigenvalue": np.min(
+                minimum_eigenvalues
+            ),
+            "raw_negative_count": np.sum(
+                minimum_eigenvalues < 0.0
+            ),
+            "non_psd_count": np.sum(non_psd),
+            "non_psd_share": np.mean(non_psd),
+        },
+        name="psd_diagnostics",
     )
