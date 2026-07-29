@@ -3,6 +3,7 @@
 from collections.abc import Callable
 
 import numpy as np
+import pandas as pd
 
 
 D_LOWER_BOUND = -0.49
@@ -389,3 +390,74 @@ def forecast_arfima_0d0_one_step(
         forecasts,
         dtype=float,
     )
+
+
+def fit_and_forecast_arfima_0d0_holdout(
+    series: pd.Series,
+    training_observation_count: int,
+) -> tuple[
+    pd.Series,
+    dict[str, float | bool | int],
+]:
+    if not series.index.is_unique:
+        raise ValueError(
+            "The time-series index must be unique."
+        )
+
+    if not series.index.is_monotonic_increasing:
+        raise ValueError(
+            "The time-series index must be chronologically ordered."
+        )
+
+    if not isinstance(
+        training_observation_count,
+        (int, np.integer),
+    ):
+        raise TypeError(
+            "training_observation_count must be an integer."
+        )
+
+    training_observation_count = int(
+        training_observation_count
+    )
+
+    if training_observation_count < 20:
+        raise ValueError(
+            "At least 20 training observations are required."
+        )
+
+    if training_observation_count >= len(series):
+        raise ValueError(
+            "The training period must leave at least one "
+            "holdout observation."
+        )
+
+    values = series.to_numpy(dtype=float)
+
+    fitted_model = fit_arfima_0d0_whittle(
+        values[:training_observation_count]
+    )
+
+    forecast_positions = np.arange(
+        training_observation_count,
+        len(values),
+        dtype=int,
+    )
+
+    forecast_values = forecast_arfima_0d0_one_step(
+        observed_values=values,
+        forecast_positions=forecast_positions,
+        fractional_parameter=float(
+            fitted_model["d"]
+        ),
+        mean=float(fitted_model["mean"]),
+    )
+
+    forecasts = pd.Series(
+        forecast_values,
+        index=series.index[forecast_positions],
+        name="arfima_0d0_forecast",
+        dtype=float,
+    )
+
+    return forecasts, fitted_model

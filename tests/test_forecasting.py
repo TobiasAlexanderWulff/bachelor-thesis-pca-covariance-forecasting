@@ -3,8 +3,10 @@
 import unittest
 
 import numpy as np
+import pandas as pd
 
 from pca_covariance_forecasting.forecasting import (
+    fit_and_forecast_arfima_0d0_holdout,
     fit_arfima_0d0_whittle,
     forecast_arfima_0d0_one_step,
     fractional_differencing_weights,
@@ -176,6 +178,105 @@ class WhittleEstimationTests(unittest.TestCase):
             fit_arfima_0d0_whittle(
                 np.ones(100)
             )
+
+
+class ArfimaHoldoutWorkflowTests(unittest.TestCase):
+    def test_fits_model_exclusively_on_training_period(
+        self,
+    ) -> None:
+        random_generator = np.random.default_rng(
+            20260729
+        )
+
+        training_values = random_generator.normal(
+            size=64
+        )
+        first_holdout = np.array([1.0, 2.0, 3.0])
+        changed_holdout = np.array(
+            [1000.0, -2000.0, 3000.0]
+        )
+
+        index = pd.date_range(
+            "2024-01-01",
+            periods=67,
+            freq="30min",
+            name="timestamp",
+        )
+
+        first_series = pd.Series(
+            np.concatenate(
+                [training_values, first_holdout]
+            ),
+            index=index,
+        )
+        changed_series = pd.Series(
+            np.concatenate(
+                [training_values, changed_holdout]
+            ),
+            index=index,
+        )
+
+        first_forecasts, first_model = (
+            fit_and_forecast_arfima_0d0_holdout(
+                first_series,
+                training_observation_count=64,
+            )
+        )
+        changed_forecasts, changed_model = (
+            fit_and_forecast_arfima_0d0_holdout(
+                changed_series,
+                training_observation_count=64,
+            )
+        )
+
+        self.assertEqual(first_model, changed_model)
+
+        pd.testing.assert_index_equal(
+            first_forecasts.index,
+            index[64:],
+        )
+
+        self.assertEqual(
+            first_forecasts.iloc[0],
+            changed_forecasts.iloc[0],
+        )
+
+    def test_matches_low_level_holdout_forecasts(
+        self,
+    ) -> None:
+        index = pd.date_range(
+            "2024-01-01",
+            periods=36,
+            freq="30min",
+            name="timestamp",
+        )
+        series = pd.Series(
+            np.sin(np.arange(36) / 3.0),
+            index=index,
+        )
+
+        forecasts, fitted_model = (
+            fit_and_forecast_arfima_0d0_holdout(
+                series,
+                training_observation_count=32,
+            )
+        )
+
+        expected = forecast_arfima_0d0_one_step(
+            observed_values=series.to_numpy(),
+            forecast_positions=np.arange(32, 36),
+            fractional_parameter=float(
+                fitted_model["d"]
+            ),
+            mean=float(fitted_model["mean"]),
+        )
+
+        np.testing.assert_allclose(
+            forecasts.to_numpy(),
+            expected,
+            rtol=0.0,
+            atol=0.0,
+        )
 
 
 if __name__ == "__main__":
