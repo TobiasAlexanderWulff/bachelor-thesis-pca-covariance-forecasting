@@ -255,7 +255,7 @@ ARFIMA reduced the isolated residual-coefficient RMSE by $2.73\%$ relative to a 
 
 ### Primary loss-difference inference
 
-The pre-specified primary comparison was the ARFIMA dominant-indicator forecast without residual correction against the direct naive covariance forecast, using timestamp-level squared Frobenius loss.
+The designated primary comparison was the ARFIMA dominant-indicator forecast without residual correction against the direct naive covariance forecast, using timestamp-level squared Frobenius loss.
 
 A two-sided HAC test using a Bartlett/Newey-West long-run variance estimate with automatic truncation lag 7 produced
 
