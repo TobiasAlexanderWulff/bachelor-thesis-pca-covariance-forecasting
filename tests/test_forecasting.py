@@ -181,6 +181,41 @@ class WhittleEstimationTests(unittest.TestCase):
                 np.ones(100)
             )
 
+    def test_reproduces_frozen_deterministic_estimate(
+        self,
+    ) -> None:
+        values = np.random.default_rng(
+            20260729
+        ).normal(size=64)
+
+        result = fit_arfima_0d0_whittle(values)
+
+        self.assertAlmostEqual(
+            result["mean"],
+            -0.0592017245561356,
+            delta=1e-12,
+        )
+        self.assertAlmostEqual(
+            result["d"],
+            0.04383164360895035,
+            delta=1e-10,
+        )
+        self.assertAlmostEqual(
+            result["innovation_variance"],
+            1.056855276005954,
+            delta=1e-10,
+        )
+        self.assertAlmostEqual(
+            result["profile_whittle_objective"],
+            1.5623222150713483,
+            delta=1e-10,
+        )
+        self.assertAlmostEqual(
+            result["grid_best_d"],
+            0.044,
+            delta=1e-15,
+        )
+
 
 class ArfimaHoldoutWorkflowTests(unittest.TestCase):
     def test_fits_model_exclusively_on_training_period(
@@ -572,6 +607,61 @@ class DirectNaiveCovarianceForecastTests(
                             training_observation_count
                         ),
                     )
+
+
+class ArfimaForecastTests(unittest.TestCase):
+
+    def test_nonzero_d_matches_manual_recursion(
+        self,
+    ) -> None:
+        result = forecast_arfima_0d0_one_step(
+            observed_values=np.array(
+                [10.0, 12.0, 9.0, 14.0, 11.0]
+            ),
+            forecast_positions=np.array([4]),
+            fractional_parameter=0.25,
+            mean=10.0,
+        )
+
+        self.assertAlmostEqual(
+            result[0],
+            11.015625,
+        )
+
+    def test_later_forecast_uses_newly_observed_value(
+        self,
+    ) -> None:
+        original_values = np.array(
+            [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+        )
+        changed_values = original_values.copy()
+        changed_values[4] = 999.0
+
+        original_forecasts = (
+            forecast_arfima_0d0_one_step(
+                observed_values=original_values,
+                forecast_positions=np.array([4, 5]),
+                fractional_parameter=0.2,
+                mean=0.0,
+            )
+        )
+        changed_forecasts = (
+            forecast_arfima_0d0_one_step(
+                observed_values=changed_values,
+                forecast_positions=np.array([4, 5]),
+                fractional_parameter=0.2,
+                mean=0.0,
+            )
+        )
+
+        self.assertEqual(
+            original_forecasts[0],
+            changed_forecasts[0],
+        )
+        self.assertNotEqual(
+            original_forecasts[1],
+            changed_forecasts[1],
+        )
 
 
 if __name__ == "__main__":
