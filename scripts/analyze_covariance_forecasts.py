@@ -1,4 +1,4 @@
-"""Run the primary covariance-forecast holdout comparison."""
+"""Run the retained reduced-scope covariance-forecast analysis."""
 
 from pathlib import Path
 
@@ -12,13 +12,10 @@ from pca_covariance_forecasting.data import (
     load_closing_prices,
 )
 from pca_covariance_forecasting.evaluation import (
-    automatic_circular_block_length,
-    automatic_hac_lag,
-    circular_block_bootstrap_mean_interval,
+    compute_aggregated_relative_frobenius_error,
     compute_covariance_rmse,
-    compute_covariance_squared_frobenius_losses,
-    compute_hac_equal_accuracy_test,
     compute_psd_diagnostics,
+    compute_relative_frobenius_errors,
 )
 from pca_covariance_forecasting.forecasting import (
     construct_direct_naive_covariance_forecasts,
@@ -26,9 +23,12 @@ from pca_covariance_forecasting.forecasting import (
     fit_and_forecast_arfima_0d0_holdout,
 )
 from pca_covariance_forecasting.pca import (
+    compute_approximation_errors,
     compute_reference_covariance,
     compute_reference_eigendecomposition,
+    construct_reference_basis_approximations,
     transform_covariances_to_reference_basis,
+    transform_covariances_from_reference_basis,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -51,11 +51,6 @@ METHOD_NAMES = {
     NAIVE_INDICATOR: "Naive dominant indicator",
     ARFIMA_INDICATOR: "ARFIMA dominant indicator",
 }
-
-BOOTSTRAP_REPLICATION_COUNT = 100_000
-BOOTSTRAP_RANDOM_SEED = 20260729
-BOOTSTRAP_CONFIDENCE_LEVEL = 0.95
-
 
 def select_covariances(
     covariance_matrices: pd.DataFrame,
@@ -83,6 +78,71 @@ def select_covariances(
         )
 
     return selected
+
+
+def compute_reference_pca_table(
+    reference_eigenvalues: pd.Series,
+) -> pd.DataFrame:
+    total_eigenvalue = float(reference_eigenvalues.sum())
+
+    if total_eigenvalue <= 0.0:
+        raise ValueError(
+            "The total reference eigenvalue must be positive."
+        )
+
+    summary = reference_eigenvalues.to_frame(
+        name="eigenvalue"
+    )
+    summary["variance_share_percent"] = (
+        reference_eigenvalues
+        .divide(total_eigenvalue)
+        .multiply(100.0)
+    )
+    summary.index.name = "reference_component"
+
+    return summary
+
+
+def compute_approximation_summary_table(
+    covariances_by_sample: dict[str, pd.DataFrame],
+    errors_by_sample: dict[str, pd.DataFrame],
+) -> pd.DataFrame:
+    if covariances_by_sample.keys() != errors_by_sample.keys():
+        raise ValueError(
+            "Covariance and error samples must have identical names."
+        )
+
+    summaries = {}
+
+    for sample, covariances in covariances_by_sample.items():
+        errors = errors_by_sample[sample]
+        interval_errors = compute_relative_frobenius_errors(
+            errors=errors,
+            covariance_matrices=covariances,
+        )
+
+        summaries[sample] = pd.Series(
+            {
+                "aggregated_error": (
+                    compute_aggregated_relative_frobenius_error(
+                        errors=errors,
+                        covariance_matrices=covariances,
+                    )
+                ),
+                "mean_interval_error": interval_errors.mean(),
+                "median_interval_error": interval_errors.median(),
+                "95th_percentile_interval_error": (
+                    interval_errors.quantile(0.95)
+                ),
+                "maximum_interval_error": interval_errors.max(),
+            },
+            dtype=float,
+        )
+
+    summary = pd.DataFrame(summaries)
+    summary.index.name = "error_summary"
+
+    return summary
 
 
 def compute_rmse_table(
@@ -164,125 +224,6 @@ def compute_psd_table(
     return diagnostics
 
 
-def compute_loss_difference_inference(
-    actual_covariances: pd.DataFrame,
-    benchmark_forecasts: pd.DataFrame,
-    candidate_forecasts: pd.DataFrame,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    for method, forecasts in {
-        "benchmark": benchmark_forecasts,
-        "candidate": candidate_forecasts,
-    }.items():
-        if not forecasts.index.equals(
-            actual_covariances.index
-        ):
-            raise ValueError(
-                f"Forecast alignment failed for {method}."
-            )
-
-    benchmark_errors = (
-        actual_covariances
-        - benchmark_forecasts
-    )
-    candidate_errors = (
-        actual_covariances
-        - candidate_forecasts
-    )
-
-    benchmark_losses = (
-        compute_covariance_squared_frobenius_losses(
-            benchmark_errors
-        )
-    )
-    candidate_losses = (
-        compute_covariance_squared_frobenius_losses(
-            candidate_errors
-        )
-    )
-
-    if not benchmark_losses.index.equals(
-        candidate_losses.index
-    ):
-        raise ValueError(
-            "Benchmark and candidate losses are not aligned."
-        )
-
-    loss_differences = (
-        benchmark_losses
-        - candidate_losses
-    )
-
-    observation_count = len(loss_differences)
-    hac_max_lag = automatic_hac_lag(
-        observation_count
-    )
-    block_length = automatic_circular_block_length(
-        observation_count
-    )
-
-    mean_loss_summary = pd.DataFrame(
-        {
-            "benchmark_mean_loss": (
-                benchmark_losses.mean()
-            ),
-            "candidate_mean_loss": (
-                candidate_losses.mean()
-            ),
-            "mean_loss_difference": (
-                loss_differences.mean()
-            ),
-            "candidate_loss_reduction_percent": (
-                (
-                    benchmark_losses.mean()
-                    - candidate_losses.mean()
-                )
-                .divide(benchmark_losses.mean())
-                .multiply(100.0)
-            ),
-        }
-    )
-    mean_loss_summary.index.name = "loss_component"
-
-    hac_tests = pd.DataFrame(
-        {
-            component: compute_hac_equal_accuracy_test(
-                loss_differences[component],
-                max_lag=hac_max_lag,
-            )
-            for component in loss_differences.columns
-        }
-    ).T
-    hac_tests.index.name = "loss_component"
-
-    bootstrap_intervals = pd.DataFrame(
-        {
-            component: (
-                circular_block_bootstrap_mean_interval(
-                    values=loss_differences[component],
-                    block_length=block_length,
-                    replication_count=(
-                        BOOTSTRAP_REPLICATION_COUNT
-                    ),
-                    random_seed=(
-                        BOOTSTRAP_RANDOM_SEED
-                    ),
-                    confidence_level=(
-                        BOOTSTRAP_CONFIDENCE_LEVEL
-                    ),
-                )
-            )
-            for component in loss_differences.columns
-        }
-    ).T
-    bootstrap_intervals.index.name = "loss_component"
-
-    return (
-        mean_loss_summary,
-        hac_tests,
-        bootstrap_intervals,
-    )
-
-
 def main() -> None:
     closing_prices = load_closing_prices(
         DATA_DIRECTORY
@@ -339,6 +280,52 @@ def main() -> None:
         transform_covariances_to_reference_basis(
             covariances=covariance_matrices,
             reference_basis=reference_basis,
+        )
+    )
+
+    reference_basis_approximations = (
+        construct_reference_basis_approximations(
+            transformed_covariances=(
+                transformed_covariances
+            ),
+            reference_eigenvalues=reference_eigenvalues,
+        )
+    )
+    covariance_approximations = (
+        transform_covariances_from_reference_basis(
+            transformed_covariances=(
+                reference_basis_approximations
+            ),
+            reference_basis=reference_basis,
+        )
+    )
+    approximation_errors = compute_approximation_errors(
+        covariances=covariance_matrices,
+        approximated_covariances=covariance_approximations,
+    )
+
+    training_approximation_errors = select_covariances(
+        approximation_errors,
+        training_timestamps,
+    )
+    test_approximation_errors = select_covariances(
+        approximation_errors,
+        test_timestamps,
+    )
+
+    reference_pca_summary = compute_reference_pca_table(
+        reference_eigenvalues
+    )
+    approximation_summary = (
+        compute_approximation_summary_table(
+            covariances_by_sample={
+                "Training": training_covariances,
+                "Holdout": test_covariances,
+            },
+            errors_by_sample={
+                "Training": training_approximation_errors,
+                "Holdout": test_approximation_errors,
+            },
         )
     )
 
@@ -428,18 +415,6 @@ def main() -> None:
         forecasts_by_method
     )
 
-    (
-        mean_loss_summary,
-        hac_tests,
-        bootstrap_intervals,
-    ) = compute_loss_difference_inference(
-        actual_covariances=test_covariances,
-        benchmark_forecasts=direct_naive_forecasts,
-        candidate_forecasts=(
-            arfima_indicator_covariance_forecasts
-        ),
-    )
-
     print("Holdout split:")
     print(
         f"  Total covariance matrices: "
@@ -460,6 +435,27 @@ def main() -> None:
     print(
         f"  First test timestamp: "
         f"{test_timestamps[0]}"
+    )
+
+    print("\nReference PCA:")
+    print(
+        reference_pca_summary.to_string(
+            formatters={
+                "eigenvalue": (
+                    lambda value: f"{value:.12e}"
+                ),
+                "variance_share_percent": (
+                    lambda value: f"{value:.6f}"
+                ),
+            }
+        )
+    )
+
+    print("\nSingle-indicator approximation errors:")
+    print(
+        approximation_summary.to_string(
+            float_format=lambda value: f"{value:.6f}"
+        )
     )
 
     print("\nARFIMA(0, d, 0) training estimate:")
@@ -502,68 +498,6 @@ def main() -> None:
     print("\nForecast PSD diagnostics:")
     print(
         psd_diagnostics.to_string(
-            float_format=lambda value: f"{value:.12e}"
-        )
-    )
-
-    print("\nLoss-difference inference:")
-    print(
-        "  Benchmark: Direct naive covariance"
-    )
-    print(
-        "  Candidate: ARFIMA dominant indicator"
-    )
-    print(
-        "  Convention: benchmark loss - candidate loss"
-    )
-    print(
-        "  Positive differences favor the candidate."
-    )
-    print(
-        "  Primary loss: overall squared "
-        "Frobenius loss."
-    )
-    print(
-        "  Diagonal and off-diagonal results "
-        "are supplementary."
-    )
-
-    print("\nMean loss comparison:")
-    print(
-        mean_loss_summary.to_string(
-            float_format=lambda value: f"{value:.12e}"
-        )
-    )
-
-    print("\nBartlett-HAC equal-accuracy tests:")
-    print(
-        hac_tests[
-            [
-                "observation_count",
-                "hac_max_lag",
-                "mean_loss_difference",
-                "long_run_variance",
-                "standard_error_of_mean",
-                "test_statistic",
-                "p_value_two_sided",
-            ]
-        ].to_string(
-            float_format=lambda value: f"{value:.12e}"
-        )
-    )
-
-    print("\nCircular block-bootstrap intervals:")
-    print(
-        bootstrap_intervals[
-            [
-                "block_length",
-                "bootstrap_replications",
-                "confidence_level",
-                "bootstrap_mean",
-                "confidence_interval_lower",
-                "confidence_interval_upper",
-            ]
-        ].to_string(
             float_format=lambda value: f"{value:.12e}"
         )
     )
