@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-29
+Last updated: 2026-08-10
 
 ## Project phase
 
@@ -13,6 +13,25 @@ The model-independent data pipeline, the PCA-based approximation pipeline, resid
 Commit `d418fc6` introduced the repository-reproducible primary forecasting analysis in `scripts/analyze_covariance_forecasts.py`. It estimates the dominant-indicator ARFIMA model using training data only and compares it against the direct naive covariance forecast and the naive dominant-indicator forecast on the fixed holdout.
 
 Forecasts of the complete residual eigendecomposition, residual-correction experiments, loss-concentration diagnostics, and additional inference sensitivity checks remain exploratory unless explicitly identified below. They must not be presented as repository-reproducible thesis evidence yet.
+
+## Confirmed reduced thesis scope
+
+The supervisor has confirmed the reduced one-indicator scope. The retained
+thesis analysis consists of the fixed training PCA basis, the dominant
+indicator, its ARFIMA(0, d, 0) forecast, the direct naive covariance and naive
+indicator benchmarks, overall/diagonal/off-diagonal RMSE, PSD diagnostics, and
+descriptive error summaries.
+
+Residual eigendecomposition forecasting, residual-component tuning, HAC
+inference, block-bootstrap inference, and oracle variants are not part of the
+retained thesis scope. Earlier sections below document implementation history
+and exploratory evidence; they do not override this confirmed scope.
+
+The reproducible figure generator `scripts/generate_thesis_figures.py` exports
+six scope-aligned figures in PNG, PDF, and SVG formats plus their supporting CSV
+tables under `output/figures/`. The figure set covers data context, PCA variance
+shares, the dominant indicator, approximation-error distributions, descriptive
+RMSE changes, and the cumulative holdout loss difference.
 
 ## Covariance-matrix construction
 

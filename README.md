@@ -19,3 +19,19 @@ To run Python commands inside the project environment:
 ```bash
 uv run python
 ```
+
+## Reproducible analysis and thesis figures
+
+Run the retained reduced-scope analysis with:
+
+```bash
+uv run python scripts/analyze_covariance_forecasts.py
+```
+
+Generate the thesis figure set and its supporting CSV tables with:
+
+```bash
+uv run python scripts/generate_thesis_figures.py
+```
+
+The figures are exported to `output/figures/` as PNG, PDF, and SVG files.
