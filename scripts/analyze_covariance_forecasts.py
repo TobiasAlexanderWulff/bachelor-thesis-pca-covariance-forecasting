@@ -1,5 +1,6 @@
 """Run the retained reduced-scope covariance-forecast analysis."""
 
+import argparse
 from pathlib import Path
 
 import pandas as pd
@@ -17,6 +18,7 @@ from pca_covariance_forecasting.evaluation import (
     compute_psd_diagnostics,
     compute_relative_frobenius_errors,
 )
+from pca_covariance_forecasting.experiment_config import load_experiment_config
 from pca_covariance_forecasting.forecasting import (
     construct_direct_naive_covariance_forecasts,
     construct_dominant_indicator_covariance_forecasts,
@@ -38,9 +40,11 @@ DATA_DIRECTORY = (
     / "raw"
     / "binance"
 )
+DEFAULT_CONFIG_PATH = (
+    PROJECT_ROOT / "config" / "experiments" / "2024_full_year.yaml"
+)
 
-EXPECTED_COVARIANCE_COUNT = 4_367
-TRAINING_OBSERVATION_COUNT = 2_183
+TRAINING_OBSERVATION_COUNT = 8_783
 
 DIRECT_NAIVE = "direct_naive_covariance"
 NAIVE_INDICATOR = "naive_dominant_indicator"
@@ -225,14 +229,21 @@ def compute_psd_table(
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    arguments = parser.parse_args()
+    config = load_experiment_config(arguments.config)
+
     closing_prices = load_closing_prices(
-        DATA_DIRECTORY
+        DATA_DIRECTORY,
+        config,
     )
     log_returns = compute_log_returns(
         closing_prices
     )
     covariance_matrices = compute_block_covariances(
-        log_returns
+        log_returns,
+        block_size=config.block_size,
     )
 
     covariance_timestamps = (
@@ -241,13 +252,10 @@ def main() -> None:
         .unique()
     )
 
-    if len(covariance_timestamps) != (
-        EXPECTED_COVARIANCE_COUNT
-    ):
+    if len(covariance_timestamps) <= TRAINING_OBSERVATION_COUNT:
         raise ValueError(
-            "Expected "
-            f"{EXPECTED_COVARIANCE_COUNT} covariance matrices, "
-            f"received {len(covariance_timestamps)}."
+            "The configured data period does not contain enough covariance "
+            "matrices for the fixed training split."
         )
 
     training_timestamps = covariance_timestamps[

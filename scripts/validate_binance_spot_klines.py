@@ -1,5 +1,6 @@
-"""Validate the downloaded Binance Spot kline archives."""
+"""Validate the downloaded Binance Spot kline archives for one experiment."""
 
+import argparse
 import calendar
 import hashlib
 from datetime import datetime, timezone
@@ -8,13 +9,17 @@ from zipfile import ZipFile
 
 import pandas as pd
 
+from pca_covariance_forecasting.experiment_config import (
+    ExperimentConfig,
+    load_experiment_config,
+)
 
-SYMBOLS = ("BTCUSDT", "ETHUSDT", "BNBUSDT")
-INTERVAL = "1m"
-MONTHS = ("2024-01", "2024-02", "2024-03")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIRECTORY = PROJECT_ROOT / "data" / "raw" / "binance"
+DEFAULT_CONFIG_PATH = (
+    PROJECT_ROOT / "config" / "experiments" / "2024_full_year.yaml"
+)
 
 KLINE_COLUMNS = (
     "open_time",
@@ -48,9 +53,13 @@ def verify_checksum(archive_path: Path) -> None:
         raise ValueError(f"Checksum mismatch: {archive_path.name}")
 
 
-def validate_archive(symbol: str, month: str) -> None:
-    archive_name = f"{symbol}-{INTERVAL}-{month}.zip"
-    csv_name = f"{symbol}-{INTERVAL}-{month}.csv"
+def validate_archive(
+    symbol: str,
+    month: str,
+    config: ExperimentConfig,
+) -> None:
+    archive_name = f"{symbol}-{config.interval}-{month}.zip"
+    csv_name = f"{symbol}-{config.interval}-{month}.csv"
     archive_path = DATA_DIRECTORY / archive_name
 
     verify_checksum(archive_path)
@@ -120,11 +129,19 @@ def validate_archive(symbol: str, month: str) -> None:
 
 
 def main() -> None:
-    for symbol in SYMBOLS:
-        for month in MONTHS:
-            validate_archive(symbol, month)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    arguments = parser.parse_args()
+    config = load_experiment_config(arguments.config)
 
-    print("All 9 archives passed validation.")
+    for symbol in config.symbols:
+        for month in config.months:
+            validate_archive(symbol, month, config)
+
+    print(
+        f"All {len(config.symbols) * len(config.months)} archives "
+        "passed validation."
+    )
 
 
 if __name__ == "__main__":

@@ -5,22 +5,21 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from pca_covariance_forecasting.experiment_config import ExperimentConfig
 
-SYMBOLS = ("BTCUSDT", "ETHUSDT", "BNBUSDT")
-MONTHS = ("2024-01", "2024-02", "2024-03")
-INTERVAL = "1m"
-
-
-def load_closing_prices(data_directory: Path) -> pd.DataFrame:
+def load_closing_prices(
+    data_directory: Path,
+    config: ExperimentConfig,
+) -> pd.DataFrame:
     closing_prices_by_symbol = {}
 
-    for symbol in SYMBOLS:
+    for symbol in config.symbols:
         monthly_closing_prices = []
 
-        for month in MONTHS:
+        for month in config.months:
             archive_path = (
                 data_directory
-                / f"{symbol}-{INTERVAL}-{month}.zip"
+                / f"{symbol}-{config.interval}-{month}.zip"
             )
 
             month_data = pd.read_csv(

@@ -6,6 +6,7 @@ and a descriptive time-path diagnostic. It deliberately excludes residual
 eigendecompositions and inferential HAC or bootstrap results.
 """
 
+import argparse
 from pathlib import Path
 
 import matplotlib
@@ -34,6 +35,7 @@ from pca_covariance_forecasting.evaluation import (
     compute_psd_diagnostics,
     compute_relative_frobenius_errors,
 )
+from pca_covariance_forecasting.experiment_config import load_experiment_config
 from pca_covariance_forecasting.forecasting import (
     construct_direct_naive_covariance_forecasts,
     construct_dominant_indicator_covariance_forecasts,
@@ -52,9 +54,11 @@ from pca_covariance_forecasting.pca import (
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIRECTORY = PROJECT_ROOT / "data" / "raw" / "binance"
 OUTPUT_DIRECTORY = PROJECT_ROOT / "output" / "figures"
+DEFAULT_CONFIG_PATH = (
+    PROJECT_ROOT / "config" / "experiments" / "2024_full_year.yaml"
+)
 
-EXPECTED_COVARIANCE_COUNT = 4_367
-TRAINING_OBSERVATION_COUNT = 2_183
+TRAINING_OBSERVATION_COUNT = 8_783
 
 DIRECT_NAIVE = "direct_naive_covariance"
 NAIVE_INDICATOR = "naive_dominant_indicator"
@@ -107,6 +111,10 @@ FIGURE_CONTRACTS = {
     "06_cumulative_loss_difference": (
         "Temporal diagnostic: show when the aggregate holdout advantage "
         "over the direct naive covariance forecast accumulated."
+    ),
+    "07_cumulative_indicator_loss_difference": (
+        "Temporal diagnostic: show when the aggregate holdout advantage "
+        "of ARFIMA over the naive dominant-indicator forecast accumulated."
     ),
 }
 
@@ -235,6 +243,7 @@ def save_figure(
 def plot_normalized_closing_prices(
     closing_prices: pd.DataFrame,
     holdout_start: pd.Timestamp,
+    period_label: str,
     output_directory: Path,
 ) -> list[Path]:
     """Plot daily normalized closing-price paths for dataset context."""
@@ -262,7 +271,7 @@ def plot_normalized_closing_prices(
     ax.set_title("Normalized closing-price paths", loc="left", pad=28)
     add_subtitle(
         ax,
-        "Daily last close; index = 100 on 1 January 2024",
+        "Daily last close; index = 100 at the start of the configured period",
     )
     ax.set_xlabel("Date (UTC)")
     ax.set_ylabel("Normalized price index")
@@ -271,7 +280,7 @@ def plot_normalized_closing_prices(
     style_time_axis(ax)
     add_source_note(
         fig,
-        "Source: Binance Spot one-minute klines, Q1 2024. "
+        f"Source: Binance Spot one-minute klines, {period_label}. "
         "Daily sampling is used only for visual context.",
     )
 
@@ -504,6 +513,7 @@ def plot_approximation_error_distributions(
 
 def plot_covariance_rmse_reduction(
     rmse_by_method: pd.DataFrame,
+    holdout_count: int,
     output_directory: Path,
 ) -> list[Path]:
     """Plot signed RMSE reductions relative to the direct naive benchmark."""
@@ -561,7 +571,8 @@ def plot_covariance_rmse_reduction(
     )
     add_subtitle(
         ax,
-        "Positive values indicate lower RMSE; fixed holdout with 2,184 matrices",
+        "Positive values indicate lower RMSE; fixed holdout with "
+        f"{holdout_count:,} matrices",
     )
     ax.set_xlabel("RMSE reduction (%)")
     ax.set_ylabel("Covariance-matrix component")
@@ -582,15 +593,18 @@ def plot_covariance_rmse_reduction(
 
 
 def plot_cumulative_loss_difference(
-    direct_naive_losses: pd.Series,
-    arfima_losses: pd.Series,
+    benchmark_losses: pd.Series,
+    candidate_losses: pd.Series,
+    benchmark_label: str,
+    candidate_label: str,
+    output_stem: str,
     output_directory: Path,
 ) -> list[Path]:
     """Plot cumulative benchmark-minus-candidate squared loss."""
-    if not direct_naive_losses.index.equals(arfima_losses.index):
+    if not benchmark_losses.index.equals(candidate_losses.index):
         raise ValueError("Loss series must use identical timestamps.")
 
-    loss_difference = direct_naive_losses - arfima_losses
+    loss_difference = benchmark_losses - candidate_losses
     cumulative_difference = loss_difference.cumsum().divide(1e-8)
     candidate_win_count = int(loss_difference.gt(0.0).sum())
     observation_count = len(loss_difference)
@@ -625,7 +639,7 @@ def plot_cumulative_loss_difference(
     ax.text(
         0.015,
         0.96,
-        "ARFIMA lower loss at "
+        f"{candidate_label} lower loss at "
         f"{candidate_win_count:,}/{observation_count:,} timestamps "
         f"({candidate_win_share:.1f}%)",
         transform=ax.transAxes,
@@ -646,7 +660,8 @@ def plot_cumulative_loss_difference(
     )
     add_subtitle(
         ax,
-        "Direct naive loss minus ARFIMA-indicator loss; positive values favor ARFIMA",
+        f"{benchmark_label} loss minus {candidate_label} loss; "
+        f"positive values favor {candidate_label}",
     )
     ax.set_xlabel("Holdout date (UTC)")
     ax.set_ylabel(r"Cumulative loss difference ($\times 10^{-8}$)")
@@ -661,7 +676,7 @@ def plot_cumulative_loss_difference(
     return save_figure(
         fig,
         output_directory,
-        "06_cumulative_loss_difference",
+        output_stem,
     )
 
 
@@ -700,19 +715,27 @@ def save_supporting_tables(
 
 def main() -> None:
     """Reproduce the reduced analysis and export the approved figure set."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    arguments = parser.parse_args()
+    config = load_experiment_config(arguments.config)
+
     configure_plot_style()
 
-    closing_prices = load_closing_prices(DATA_DIRECTORY)
+    closing_prices = load_closing_prices(DATA_DIRECTORY, config)
     log_returns = compute_log_returns(closing_prices)
-    covariance_matrices = compute_block_covariances(log_returns)
+    covariance_matrices = compute_block_covariances(
+        log_returns,
+        block_size=config.block_size,
+    )
     covariance_timestamps = (
         covariance_matrices.index.get_level_values("timestamp").unique()
     )
 
-    if len(covariance_timestamps) != EXPECTED_COVARIANCE_COUNT:
+    if len(covariance_timestamps) <= TRAINING_OBSERVATION_COUNT:
         raise ValueError(
-            f"Expected {EXPECTED_COVARIANCE_COUNT} covariance matrices, "
-            f"received {len(covariance_timestamps)}."
+            "The configured data period does not contain enough covariance "
+            "matrices for the fixed training split."
         )
 
     training_timestamps = covariance_timestamps[
@@ -842,6 +865,9 @@ def main() -> None:
     direct_naive_losses = compute_covariance_squared_frobenius_losses(
         holdout_covariances - direct_naive_forecasts
     )["overall"]
+    naive_indicator_losses = compute_covariance_squared_frobenius_losses(
+        holdout_covariances - naive_indicator_covariance_forecasts
+    )["overall"]
     arfima_losses = compute_covariance_squared_frobenius_losses(
         holdout_covariances - arfima_indicator_covariance_forecasts
     )["overall"]
@@ -880,10 +906,12 @@ def main() -> None:
         raise ValueError("At least one plotted forecast method is non-PSD.")
 
     generated_paths = []
+    period_label = f"{config.months[0]} to {config.months[-1]}"
     generated_paths.extend(
         plot_normalized_closing_prices(
             closing_prices,
             holdout_timestamps[0],
+            period_label,
             OUTPUT_DIRECTORY,
         )
     )
@@ -912,6 +940,7 @@ def main() -> None:
     generated_paths.extend(
         plot_covariance_rmse_reduction(
             rmse_by_method,
+            len(holdout_timestamps),
             OUTPUT_DIRECTORY,
         )
     )
@@ -919,6 +948,19 @@ def main() -> None:
         plot_cumulative_loss_difference(
             direct_naive_losses,
             arfima_losses,
+            "Direct naive",
+            "ARFIMA indicator",
+            "06_cumulative_loss_difference",
+            OUTPUT_DIRECTORY,
+        )
+    )
+    generated_paths.extend(
+        plot_cumulative_loss_difference(
+            naive_indicator_losses,
+            arfima_losses,
+            "Naive indicator",
+            "ARFIMA indicator",
+            "07_cumulative_indicator_loss_difference",
             OUTPUT_DIRECTORY,
         )
     )
