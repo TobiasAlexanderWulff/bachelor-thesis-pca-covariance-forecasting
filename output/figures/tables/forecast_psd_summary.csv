@@ -1,4 +1,4 @@
 ,minimum_eigenvalue,raw_negative_count,non_psd_count,non_psd_share
-Direct naive covariance,1.839651951968276e-09,0.0,0.0,0.0
-Naive dominant indicator,2.5921847036445028e-08,0.0,0.0,0.0
-ARFIMA dominant indicator,1.206120931557072e-07,0.0,0.0,0.0
+Direct naive covariance,1.8396519519682754e-09,0.0,0.0,0.0
+Naive dominant indicator,2.5921847036444965e-08,0.0,0.0,0.0
+ARFIMA dominant indicator,1.2061209315570386e-07,0.0,0.0,0.0
