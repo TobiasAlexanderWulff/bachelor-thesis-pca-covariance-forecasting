@@ -2,8 +2,8 @@
 
 The figure set follows the approved evidence chain: data context, PCA
 motivation, forecast target, approximation quality, benchmark performance,
-and a descriptive time-path diagnostic. It deliberately excludes residual
-eigendecompositions and inferential HAC or bootstrap results.
+and a descriptive time-path diagnostic. It deliberately excludes additional
+time-varying residual models and inferential HAC or bootstrap results.
 """
 
 import argparse
@@ -89,7 +89,7 @@ ASSET_COLORS = {
 
 FIGURE_CONTRACTS = {
     "01_normalized_closing_prices": (
-        "Data context: compare the three assets over Q1 2024 without "
+        "Data context: compare the three assets over 2024 without "
         "letting their different price levels determine the visual scale."
     ),
     "02_reference_pca_variance_share": (
@@ -329,7 +329,7 @@ def plot_reference_pca_variance_share(
     )
     add_subtitle(
         ax,
-        "Fixed reference covariance estimated from 2,183 training matrices",
+        "Fixed reference covariance estimated from 8,783 training matrices",
     )
     ax.set_xlabel("Reference component")
     ax.set_ylabel("Share of total variance (%)")
