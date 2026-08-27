@@ -665,18 +665,8 @@ def plot_cumulative_loss_difference(
     )
     ax.set_xlabel("Holdout date (UTC)")
     ax.set_ylabel(r"Cumulative loss difference ($\times 10^{-8}$)")
+    ax.margins(x=0.01)
     style_time_axis(ax)
-    first_holdout_month = (
-        cumulative_difference.index[0].normalize().replace(day=1)
-    )
-    holdout_month_ticks = pd.date_range(
-        start=first_holdout_month,
-        end=cumulative_difference.index[-1],
-        freq="MS",
-    )
-    ax.set_xlim(first_holdout_month, cumulative_difference.index[-1])
-    ax.set_xticks(holdout_month_ticks)
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
     add_source_note(
         fig,
         "Descriptive holdout diagnostic only; it is not a significance "
