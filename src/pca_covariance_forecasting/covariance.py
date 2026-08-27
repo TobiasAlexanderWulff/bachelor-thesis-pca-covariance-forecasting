@@ -10,6 +10,7 @@ def compute_block_covariances(
     returns: pd.DataFrame,
     block_size: int = BLOCK_SIZE,
 ) -> pd.DataFrame:
+    """Estimate centred sample covariances in complete non-overlapping blocks."""
     number_of_complete_blocks = len(returns) // block_size
 
     covariance_matrices = []

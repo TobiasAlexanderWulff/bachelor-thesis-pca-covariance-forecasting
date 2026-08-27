@@ -7,10 +7,12 @@ import pandas as pd
 
 from pca_covariance_forecasting.experiment_config import ExperimentConfig
 
+
 def load_closing_prices(
     data_directory: Path,
     config: ExperimentConfig,
 ) -> pd.DataFrame:
+    """Load configured monthly ZIP archives into one UTC price table."""
     closing_prices_by_symbol = {}
 
     for symbol in config.symbols:
@@ -49,4 +51,5 @@ def load_closing_prices(
 
 
 def compute_log_returns(prices: pd.DataFrame) -> pd.DataFrame:
+    """Compute consecutive log returns and discard the initial missing row."""
     return np.log(prices).diff().iloc[1:]

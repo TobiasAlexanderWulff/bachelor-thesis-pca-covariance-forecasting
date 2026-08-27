@@ -20,6 +20,20 @@ OPTIMIZATION_MAX_ITERATIONS = 200
 def prepare_whittle_inputs(
     values: np.ndarray,
 ) -> tuple[float, np.ndarray, np.ndarray]:
+    """Center a training series and construct its Whittle inputs.
+
+    Parameters
+    ----------
+    values:
+        One-dimensional training observations in chronological order.
+
+    Returns
+    -------
+    tuple
+        The training-sample mean, the periodogram evaluated at the positive
+        Fourier frequencies, and ``log(2 sin(omega / 2))`` at those
+        frequencies. The latter is reused across candidate values of ``d``.
+    """
     values = np.asarray(values, dtype=float)
 
     if values.ndim != 1:
@@ -94,6 +108,13 @@ def evaluate_profile_whittle_objective(
     periodogram: np.ndarray,
     log_frequency_factor: np.ndarray,
 ) -> tuple[float, float]:
+    """Evaluate the profiled ARFIMA(0, d, 0) Whittle criterion.
+
+    The innovation variance is profiled out for the supplied candidate ``d``.
+    The returned tuple contains the objective value and the corresponding
+    innovation-variance estimate. Invalid non-positive scales produce
+    ``(inf, nan)`` so they cannot be selected by the optimizer.
+    """
     log_spectral_shape = (
         -2.0
         * fractional_parameter
@@ -133,6 +154,13 @@ def refine_bounded_minimum(
     lower_bound: float,
     upper_bound: float,
 ) -> tuple[float, int]:
+    """Refine a bracketed one-dimensional minimum by golden-section search.
+
+    ``objective`` is assumed to be unimodal on the closed interval. The search
+    stops when the interval is narrower than ``OPTIMIZATION_TOLERANCE`` or the
+    iteration limit is reached. The midpoint estimate and iteration count are
+    returned.
+    """
     if not lower_bound < upper_bound:
         raise ValueError(
             "The optimization interval must have positive width."
@@ -198,6 +226,15 @@ def refine_bounded_minimum(
 def fit_arfima_0d0_whittle(
     values: np.ndarray,
 ) -> dict[str, float | bool | int]:
+    """Fit the retained ARFIMA(0, d, 0) Profile-Whittle specification.
+
+    The location estimate is the training-sample mean. The objective is first
+    evaluated on the fixed grid from -0.49 to 0.49. The best grid point and its
+    immediate neighbours define the interval refined by golden-section search.
+    Returned diagnostics include ``mean``, ``d``, innovation variance,
+    objective value, frequency count, grid estimate, refinement iterations,
+    and distance from the admissible search boundary.
+    """
     (
         mean,
         periodogram,
@@ -286,6 +323,11 @@ def fractional_differencing_weights(
     fractional_parameter: float,
     count: int,
 ) -> np.ndarray:
+    """Return ``count`` coefficients of the fractional-difference expansion.
+
+    Coefficients are generated recursively from ``pi_0 = 1`` according to the
+    ARFIMA(0, d, 0) convention used by the forecast recursion.
+    """
     if not np.isfinite(fractional_parameter):
         raise ValueError(
             "The fractional parameter must be finite."
@@ -319,6 +361,26 @@ def forecast_arfima_0d0_one_step(
     fractional_parameter: float,
     mean: float,
 ) -> np.ndarray:
+    """Compute finite-history one-step ARFIMA(0, d, 0) forecasts.
+
+    Parameters
+    ----------
+    observed_values:
+        Full observed series, including holdout values that become known before
+        later forecast origins.
+    forecast_positions:
+        Integer target positions. Only observations strictly before each target
+        are used.
+    fractional_parameter, mean:
+        Training-estimated parameters held fixed across all forecast origins.
+
+    Returns
+    -------
+    numpy.ndarray
+        Forecasts in the same order as ``forecast_positions``. The theoretical
+        infinite recursion is truncated at the beginning of the observed sample;
+        no pre-sample values are imputed.
+    """
     observed_values = np.asarray(
         observed_values,
         dtype=float,
@@ -402,6 +464,13 @@ def fit_and_forecast_arfima_0d0_holdout(
     pd.Series,
     dict[str, float | bool | int],
 ]:
+    """Fit on the training slice and forecast every holdout origin once.
+
+    Model parameters are estimated only from the first
+    ``training_observation_count`` values. The observed history expands after
+    each holdout realization, while the fitted parameters remain fixed. The
+    forecast series and complete fit-diagnostic dictionary are returned.
+    """
     if not series.index.is_unique:
         raise ValueError(
             "The time-series index must be unique."
@@ -471,6 +540,13 @@ def construct_dominant_indicator_covariance_forecasts(
     reference_basis: pd.DataFrame,
     reference_eigenvalues: pd.Series,
 ) -> pd.DataFrame:
+    """Map scalar indicator forecasts through the fixed-remainder PCA model.
+
+    The first transformed diagonal element is replaced by each forecast. All
+    remaining diagonal elements stay at their training-reference eigenvalues,
+    and transformed off-diagonal elements are zero before reconstruction in the
+    original asset coordinates.
+    """
     if dominant_indicator_forecasts.empty:
         raise ValueError(
             "At least one dominant-indicator forecast is required."
@@ -571,6 +647,7 @@ def construct_direct_naive_covariance_forecasts(
     covariance_matrices: pd.DataFrame,
     training_observation_count: int,
 ) -> pd.DataFrame:
+    """Use the most recently observed covariance as each holdout forecast."""
     if covariance_matrices.empty:
         raise ValueError(
             "At least one covariance matrix is required."

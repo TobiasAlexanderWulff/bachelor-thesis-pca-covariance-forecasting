@@ -1,37 +1,96 @@
 # PCA Covariance Forecasting
 
-Research code for a bachelor's thesis investigating PCA-based representations and forecasts of covariance matrices.
+Research code for the bachelor thesis *PCA-based Forecasting of Portfolio
+Volatility*. The retained experiment constructs 30-minute sample covariance
+matrices for BTC, ETH, and BNB from one-minute observations during 2024. A fixed
+PCA reference basis is estimated on the chronological training period, and the
+dominant fixed-basis indicator is forecast with naive persistence and an
+ARFIMA(0, d, 0) model. Direct covariance persistence is used as the matrix-level
+benchmark.
 
-## Project status
+## Reproducible environment
 
-This repository is being rebuilt from the ground up. Methodological decisions and implementation details are developed and documented incrementally.
-
-## Development setup
-
-The project requires Python 3.12 and uses `uv` for dependency and environment management.
-
-```bash
-uv sync
-```
-
-To run Python commands inside the project environment:
+Python 3.12 and [`uv`](https://docs.astral.sh/uv/) are required. The complete
+dependency resolution is recorded in `uv.lock`.
 
 ```bash
-uv run python
+uv sync --frozen
 ```
 
-## Reproducible analysis and thesis figures
+All commands below are run from the repository root with the locked environment.
 
-Run the retained reduced-scope analysis with:
+## Data
+
+The experiment configuration is stored in
+`config/experiments/2024_full_year.yaml`. It identifies the symbols, interval,
+months, official Binance archive base URL, and local data directory. Downloaded
+archives and checksum sidecars are stored under `data/raw/binance/` and are
+excluded from Git.
+
+Download the exact monthly archives and their official checksum sidecars:
+
+```bash
+uv run python scripts/download_binance_spot_klines.py
+```
+
+Validate checksums, archive structure, schema, monthly calendar coverage,
+60,000-ms timestamp continuity, and finite positive OHLC prices:
+
+```bash
+uv run python scripts/validate_binance_spot_klines.py
+```
+
+The retained configuration comprises 36 archives: three symbols multiplied by
+twelve months. Analysis should be run only after all 36 archives pass validation.
+
+## Analysis and thesis figures
+
+Run the retained reduced-scope analysis:
 
 ```bash
 uv run python scripts/analyze_covariance_forecasts.py
 ```
 
-Generate the thesis figure set and its supporting CSV tables with:
+The command reports the chronological split, reference-PCA shares,
+single-indicator approximation errors, Profile-Whittle estimate, covariance
+RMSE comparison, and positive-semidefiniteness diagnostics.
+
+Generate the complete thesis figure set and supporting CSV tables:
 
 ```bash
 uv run python scripts/generate_thesis_figures.py
 ```
 
-The figures are exported to `output/figures/` as PNG, PDF, and SVG files.
+Figures are exported to `output/figures/` as PNG, PDF, and SVG files. Supporting
+tables used to audit the plotted statements are written to
+`output/figures/tables/`.
+
+## Tests
+
+Run the unit tests with:
+
+```bash
+uv run python -m unittest discover -s tests
+```
+
+The tests cover the fractional-differencing weights, Profile-Whittle inputs and
+optimization, expanding-history one-step forecasts, covariance reconstruction,
+direct persistence benchmark, RMSE aggregation, loss calculations, and
+positive-semidefiniteness diagnostics.
+
+## Repository structure
+
+```text
+config/experiments/   Retained experiment settings
+scripts/              Download, validation, analysis, and figure entry points
+src/pca_covariance_forecasting/
+                      Data, covariance, PCA, forecasting, and evaluation modules
+tests/                Unit tests for the retained pipeline
+output/figures/       Reproduced thesis figures and supporting tables
+archive/              Exploratory analyses excluded from the retained comparison
+uv.lock               Complete locked dependency resolution
+```
+
+The scripts import the package modules instead of duplicating the analysis
+logic. No notebook-specific implementation is maintained, so the command-line
+pipeline and tests remain the single reproducible code path.
