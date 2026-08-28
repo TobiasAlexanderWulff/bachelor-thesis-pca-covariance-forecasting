@@ -571,8 +571,8 @@ def plot_covariance_rmse_reduction(
     )
     add_subtitle(
         ax,
-        "Positive values indicate lower RMSE; fixed holdout with "
-        f"{holdout_count:,} matrices",
+        "Positive values indicate lower RMSE. The fixed holdout contains "
+        f"{holdout_count:,} matrices.",
     )
     ax.set_xlabel("RMSE reduction (%)")
     ax.set_ylabel("Error category")
