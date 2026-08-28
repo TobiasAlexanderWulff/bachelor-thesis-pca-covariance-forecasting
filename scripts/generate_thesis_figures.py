@@ -217,6 +217,7 @@ def save_figure(
     """Save one figure as a high-resolution raster and two vector files."""
     output_directory.mkdir(parents=True, exist_ok=True)
     saved_paths = []
+
     for extension in ("png", "pdf", "svg"):
         output_path = output_directory / f"{stem}.{extension}"
         save_arguments = {"format": extension}
