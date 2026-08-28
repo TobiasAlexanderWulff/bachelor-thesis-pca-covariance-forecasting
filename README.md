@@ -65,6 +65,36 @@ Figures are exported to `output/figures/` as PNG, PDF, and SVG files. Supporting
 tables used to audit the plotted statements are written to
 `output/figures/tables/`.
 
+## Executable reproduction notebook
+
+The executed companion notebook
+`notebooks/reproduce_thesis_results.ipynb` reproduces the retained empirical
+analysis in a reader-facing sequence. It imports and calls the data,
+covariance, PCA, forecasting, and evaluation modules directly. Mathematical
+implementation is not copied into notebook cells. The established archive
+validator, plotting functions, and unit tests remain the technical control
+path.
+
+Create the locked notebook environment and open the notebook with:
+
+```bash
+uv sync --frozen --group notebook
+uv run --group notebook jupyter lab notebooks/reproduce_thesis_results.ipynb
+```
+
+Execute and overwrite the stored outputs non-interactively with:
+
+```bash
+uv run --group notebook jupyter nbconvert \
+  --execute --to notebook --inplace \
+  --ExecutePreprocessor.timeout=1800 \
+  notebooks/reproduce_thesis_results.ipynb
+```
+
+The notebook stops if supplied-data validation, headline-result
+reconciliation, figure generation, or the test suite fails. Its stored outputs
+allow the verified results and figures to be reviewed without executing it.
+
 ## Tests
 
 Run the unit tests with:
@@ -82,6 +112,7 @@ positive-semidefiniteness diagnostics.
 
 ```text
 config/experiments/   Retained experiment settings
+notebooks/             Executed reader-facing reproduction notebook
 scripts/              Download, validation, analysis, and figure entry points
 src/pca_covariance_forecasting/
                       Data, covariance, PCA, forecasting, and evaluation modules
@@ -91,6 +122,6 @@ archive/              Exploratory analyses excluded from the retained comparison
 uv.lock               Complete locked dependency resolution
 ```
 
-The scripts import the package modules instead of duplicating the analysis
-logic. No notebook-specific implementation is maintained, so the command-line
-pipeline and tests remain the single reproducible code path.
+The scripts and notebook import the package modules instead of duplicating the
+analysis logic. The package modules and tests therefore remain the single
+implementation and verification basis for both reproduction paths.
