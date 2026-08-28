@@ -339,7 +339,7 @@ def plot_reference_pca_variance_share(
     ax.spines[["top", "right"]].set_visible(False)
     add_source_note(
         fig,
-        "Source: training reference covariance; components ordered by "
+        "Source: training reference covariance. Components are ordered by "
         "decreasing eigenvalue.",
     )
 
