@@ -660,8 +660,8 @@ def plot_cumulative_loss_difference(
     )
     add_subtitle(
         ax,
-        f"{benchmark_label} loss minus {candidate_label} loss; "
-        f"positive values favor {candidate_label}",
+        f"{benchmark_label} loss minus {candidate_label} loss. "
+        f"Positive values favor {candidate_label}.",
     )
     ax.set_xlabel("Holdout date (UTC)")
     ax.set_ylabel(r"Cumulative loss difference ($\times 10^{-8}$)")
