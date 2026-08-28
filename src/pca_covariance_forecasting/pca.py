@@ -9,6 +9,12 @@ import pandas as pd
 def compute_reference_covariance(
     training_covariances: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Average the training matrices to obtain the fixed PCA reference.
+
+    Implements ``Σ_bar = |T|^-1 sum_{t in T} Σ_t``
+    (``eq:training-reference-covariance``). Holdout matrices must therefore
+    not be included in ``training_covariances``.
+    """
     return training_covariances.groupby(
         level="asset",
         sort=False,
@@ -18,6 +24,12 @@ def compute_reference_covariance(
 def compute_reference_eigendecomposition(
     reference_covariance: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.Series]:
+    """Compute the fixed PCA basis and descending reference eigenvalues.
+
+    This supplies ``Σ_bar = V diag(λ_1,...,λ_p) V^T``
+    (``eq:pca-eigendecomposition``), with the columns of ``V`` ordered from
+    the largest to the smallest eigenvalue.
+    """
     eigenvalues, eigenvectors = np.linalg.eigh(
         reference_covariance.to_numpy()
     )
@@ -48,6 +60,12 @@ def transform_covariances_to_reference_basis(
     covariances: pd.DataFrame,
     reference_basis: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Express every covariance matrix in the fixed training PCA basis.
+
+    Implements ``B_t = V^T Σ_t V`` (``eq:fixed-basis-transform``). Because
+    the same ``V`` is used at every timestamp, ``(B_t)_{11}`` is the thesis
+    dominant indicator rather than a time-varying largest eigenvalue.
+    """
     basis = reference_basis.to_numpy()
 
     transformed_matrices = []
@@ -89,6 +107,15 @@ def construct_reference_basis_approximations(
     transformed_covariances: pd.DataFrame,
     reference_eigenvalues: pd.Series,
 ) -> pd.DataFrame:
+    """Build the observed one-indicator approximation in PCA coordinates.
+
+    Together with the inverse transform, this implements
+    ``Σ̃_t = V diag(z_t, λ_2, ..., λ_p) V^T``
+    (``eq:one-indicator-representation``), where
+    ``z_t = (B_t)_{11}`` (``eq:dominant-indicator``); transformed off-diagonal
+    terms are set to zero. This is the thesis representation diagnostic, not
+    an out-of-sample forecast.
+    """
     components = reference_eigenvalues.index
 
     approximations = []
@@ -131,6 +158,12 @@ def transform_covariances_from_reference_basis(
     transformed_covariances: pd.DataFrame,
     reference_basis: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Map matrices from fixed PCA coordinates back to asset coordinates.
+
+    Implements ``Σ_t = V B_t V^T``. When ``B_t`` is the one-indicator
+    diagonal matrix, this is the reconstruction used for both approximation
+    diagnostics and covariance forecasts.
+    """
     basis = reference_basis.to_numpy()
     components = reference_basis.columns
 
@@ -172,12 +205,17 @@ def compute_approximation_errors(
     covariances: pd.DataFrame,
     approximated_covariances: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Return ``Σ_t - Σ̃_t`` for the thesis approximation diagnostic."""
     return covariances - approximated_covariances
 
 
 def compute_error_eigendecompositions(
     errors: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Diagonalize approximation errors for exploratory residual analysis.
+
+    This residual-PCA path is not used in the retained thesis comparison.
+    """
     assets = errors.columns
     component_names = [
         f"error_component_{number}"
@@ -236,6 +274,12 @@ def match_error_eigendecomposition(
     current_basis: pd.DataFrame,
     current_eigenvalues: pd.Series,
 ) -> tuple[pd.DataFrame, pd.Series]:
+    """Align one exploratory error basis with its predecessor.
+
+    Components are permuted by absolute inner-product similarity and their
+    signs are adjusted for continuity. This is outside the retained thesis
+    forecast design.
+    """
     similarities = np.abs(
         previous_basis.to_numpy().T
         @ current_basis.to_numpy()
@@ -280,6 +324,10 @@ def match_error_eigendecompositions(
     error_bases: pd.DataFrame,
     error_eigenvalues: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Apply exploratory error-basis matching through chronological time.
+
+    This residual-PCA path is not used in the retained thesis comparison.
+    """
     timestamps = error_eigenvalues.index
 
     first_timestamp = timestamps[0]
@@ -334,6 +382,10 @@ def reconstruct_errors_from_eigendecompositions(
     error_bases: pd.DataFrame,
     error_eigenvalues: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Reconstruct exploratory errors as ``V_t diag(λ_t) V_t^T``.
+
+    This residual-PCA path is not used in the retained thesis comparison.
+    """
     components = error_eigenvalues.columns
 
     reconstructed_errors = []
@@ -375,6 +427,10 @@ def reconstruct_errors_from_eigendecompositions(
 def compute_consecutive_error_basis_similarities(
     matched_error_bases: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Measure consecutive exploratory basis similarity by inner products.
+
+    This residual-PCA diagnostic is not reported in the retained thesis.
+    """
     timestamps = (
         matched_error_bases.index
         .get_level_values("timestamp")
@@ -422,6 +478,11 @@ def construct_previous_basis_error_approximations(
     matched_error_bases: pd.DataFrame,
     matched_error_eigenvalues: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Combine prior error bases with current exploratory eigenvalues.
+
+    This residual approximation is not part of the retained thesis forecast
+    design.
+    """
     timestamps = matched_error_eigenvalues.index
     components = matched_error_eigenvalues.columns
 

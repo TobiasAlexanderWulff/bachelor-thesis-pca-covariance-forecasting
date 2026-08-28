@@ -10,7 +10,12 @@ def compute_block_covariances(
     returns: pd.DataFrame,
     block_size: int = BLOCK_SIZE,
 ) -> pd.DataFrame:
-    """Estimate centred sample covariances in complete non-overlapping blocks."""
+    """Estimate the thesis covariance matrices in complete return blocks.
+
+    For each block of ``b`` vectors, this implements the centred sample
+    covariance ``Σ = sum_i (r_i-r_bar)(r_i-r_bar)^T / (b-1)``
+    (``eq:block-sample-covariance``). Incomplete terminal blocks are excluded.
+    """
     number_of_complete_blocks = len(returns) // block_size
 
     covariance_matrices = []

@@ -60,6 +60,7 @@ def select_covariances(
     covariance_matrices: pd.DataFrame,
     timestamps: pd.Index,
 ) -> pd.DataFrame:
+    """Select an exact chronological matrix sample for train or holdout."""
     matrix_timestamps = (
         covariance_matrices.index
         .get_level_values("timestamp")
@@ -87,6 +88,10 @@ def select_covariances(
 def compute_reference_pca_table(
     reference_eigenvalues: pd.Series,
 ) -> pd.DataFrame:
+    """Report ``λ_j / sum_k λ_k`` as the thesis PCA variance share.
+
+    This is ``eq:explained-variance-share`` evaluated component by component.
+    """
     total_eigenvalue = float(reference_eigenvalues.sum())
 
     if total_eigenvalue <= 0.0:
@@ -111,6 +116,7 @@ def compute_approximation_summary_table(
     covariances_by_sample: dict[str, pd.DataFrame],
     errors_by_sample: dict[str, pd.DataFrame],
 ) -> pd.DataFrame:
+    """Separate interval-level and aggregate thesis approximation errors."""
     if covariances_by_sample.keys() != errors_by_sample.keys():
         raise ValueError(
             "Covariance and error samples must have identical names."
@@ -153,6 +159,7 @@ def compute_rmse_table(
     actual_covariances: pd.DataFrame,
     forecasts_by_method: dict[str, pd.DataFrame],
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Compare thesis RMSE measures on identical holdout targets."""
     rmse_by_method = {}
 
     for method, forecasts in forecasts_by_method.items():
@@ -203,6 +210,7 @@ def compute_rmse_table(
 def compute_psd_table(
     forecasts_by_method: dict[str, pd.DataFrame],
 ) -> pd.DataFrame:
+    """Summarize the thesis positive-semidefiniteness diagnostic by method."""
     diagnostics = pd.DataFrame(
         {
             method: compute_psd_diagnostics(
@@ -229,6 +237,7 @@ def compute_psd_table(
 
 
 def main() -> None:
+    """Run the retained thesis analysis from data loading through evaluation."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     arguments = parser.parse_args()

@@ -25,7 +25,11 @@ def _require_mapping(value: Any, name: str) -> dict[str, Any]:
 
 
 def load_experiment_config(path: Path) -> ExperimentConfig:
-    """Load and validate the variable settings from one YAML file."""
+    """Load the tracked empirical-design settings from one YAML file.
+
+    Symbols, months, sampling interval, and covariance-block length correspond
+    to the explicit study-design choices described in the thesis methodology.
+    """
     with path.open(encoding="utf-8") as config_file:
         raw_config = yaml.safe_load(config_file)
 

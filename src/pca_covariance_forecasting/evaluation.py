@@ -9,6 +9,7 @@ import pandas as pd
 def _matrix_frame_to_array(
     matrices: pd.DataFrame,
 ) -> np.ndarray:
+    """Stack chronologically indexed matrix frames for vectorized metrics."""
     assets = matrices.columns
     timestamps = (
         matrices.index
@@ -30,6 +31,11 @@ def _matrix_frame_to_array(
 def compute_frobenius_norms(
     matrices: pd.DataFrame,
 ) -> pd.Series:
+    """Compute ``||A_t||_F = sqrt(sum_ij A_t,ij²)`` by timestamp.
+
+    This is the matrix norm used in the thesis approximation errors and
+    timestamp-level forecast losses.
+    """
     assets = matrices.columns
 
     norms = []
@@ -68,6 +74,11 @@ def compute_relative_frobenius_errors(
     errors: pd.DataFrame,
     covariance_matrices: pd.DataFrame,
 ) -> pd.Series:
+    """Compute the thesis interval-level relative approximation errors.
+
+    Implements ``e_t^rel = ||Σ_t-Σ̃_t||_F / ||Σ_t||_F``
+    (``eq:relative-frobenius-approximation-error``) for aligned timestamps.
+    """
     error_norms = compute_frobenius_norms(errors)
     covariance_norms = compute_frobenius_norms(
         covariance_matrices,
@@ -95,6 +106,12 @@ def compute_aggregated_relative_frobenius_error(
     errors: pd.DataFrame,
     covariance_matrices: pd.DataFrame,
 ) -> float:
+    """Compute the thesis aggregate relative approximation error.
+
+    Implements ``sqrt(sum_t ||Σ_t-Σ̃_t||_F² / sum_t ||Σ_t||_F²)``
+    (``eq:aggregate-relative-frobenius-approximation-error``). It is not the
+    arithmetic mean of the interval-level relative errors.
+    """
     error_norms = compute_frobenius_norms(errors)
     covariance_norms = compute_frobenius_norms(
         covariance_matrices,
@@ -131,6 +148,13 @@ def compute_aggregated_relative_frobenius_error(
 def compute_covariance_rmse(
     errors: pd.DataFrame,
 ) -> pd.Series:
+    """Compute the thesis overall, diagonal, and off-diagonal RMSE.
+
+    Overall RMSE is ``sqrt(sum_t ||E_t||_F² / (|H| p²))``
+    (``eq:overall-covariance-rmse``). The other two values apply the same
+    aggregation separately to ``p`` diagonal and ``p(p-1)`` off-diagonal
+    entries per timestamp (``eq:diagonal-rmse`` and ``eq:off-diagonal-rmse``).
+    """
     error_values = _matrix_frame_to_array(errors)
     dimension = error_values.shape[1]
 
@@ -171,6 +195,12 @@ def compute_psd_diagnostics(
     covariance_matrices: pd.DataFrame,
     relative_tolerance: float = 1e-12,
 ) -> pd.Series:
+    """Check the covariance-validity diagnostic used in the thesis.
+
+    A forecast is classified as non-PSD only when its minimum eigenvalue is
+    below a scale-relative numerical tolerance. Raw negative counts are kept
+    separately to expose the values before that tolerance is applied.
+    """
     if relative_tolerance < 0.0:
         raise ValueError(
             "relative_tolerance must be non-negative."
@@ -213,6 +243,13 @@ def compute_psd_diagnostics(
 def compute_covariance_squared_frobenius_losses(
     errors: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Compute timestamp-level squared Frobenius forecast losses.
+
+    For caller-supplied ``E_t = Σ_t-Σ_hat_t`` (``eq:forecast-error-matrix``),
+    this implements ``ell_t = ||E_t||_F² = sum_ij E_t,ij²``
+    (``eq:timestamp-frobenius-loss``), alongside its diagonal and off-diagonal
+    contributions for descriptive holdout comparisons.
+    """
     error_values = _matrix_frame_to_array(errors)
     dimension = error_values.shape[1]
 
@@ -259,6 +296,10 @@ def compute_covariance_squared_frobenius_losses(
 def automatic_hac_lag(
     observation_count: int,
 ) -> int:
+    """Choose the exploratory HAC lag ``floor(4(n/100)^(2/9))``.
+
+    HAC inference is not part of the retained thesis evaluation.
+    """
     if not isinstance(
         observation_count,
         (int, np.integer),
@@ -291,6 +332,10 @@ def automatic_hac_lag(
 def automatic_circular_block_length(
     observation_count: int,
 ) -> int:
+    """Choose ``ceil(n^(1/3))`` for the exploratory block bootstrap.
+
+    Bootstrap inference is not part of the retained thesis evaluation.
+    """
     if not isinstance(
         observation_count,
         (int, np.integer),
@@ -321,6 +366,12 @@ def compute_hac_equal_accuracy_test(
     loss_differences: pd.Series | np.ndarray,
     max_lag: int,
 ) -> pd.Series:
+    """Run an exploratory equal-accuracy test with Bartlett HAC variance.
+
+    This diagnostic tests the mean loss difference using a normal reference
+    distribution. It is retained for experiments but is not reported in the
+    thesis, which makes no statistical-significance claim.
+    """
     values = np.asarray(
         loss_differences,
         dtype=float,
@@ -452,6 +503,11 @@ def circular_block_bootstrap_mean_interval(
     random_seed: int,
     confidence_level: float = 0.95,
 ) -> pd.Series:
+    """Estimate an exploratory percentile interval by circular block sampling.
+
+    Contiguous blocks preserve local ordering and wrap at the sample boundary.
+    This bootstrap diagnostic is not part of the retained thesis evaluation.
+    """
     values = np.asarray(values, dtype=float)
 
     if values.ndim != 1:

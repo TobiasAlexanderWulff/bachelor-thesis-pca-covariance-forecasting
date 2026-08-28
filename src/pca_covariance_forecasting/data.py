@@ -12,7 +12,11 @@ def load_closing_prices(
     data_directory: Path,
     config: ExperimentConfig,
 ) -> pd.DataFrame:
-    """Load configured monthly ZIP archives into one UTC price table."""
+    """Load the closing-price panel used by the empirical design.
+
+    Monthly Binance archives are joined by symbol and timestamp in UTC. The
+    returned prices are the ``P_{j,t}`` inputs of the thesis log-return formula.
+    """
     closing_prices_by_symbol = {}
 
     for symbol in config.symbols:
@@ -51,5 +55,9 @@ def load_closing_prices(
 
 
 def compute_log_returns(prices: pd.DataFrame) -> pd.DataFrame:
-    """Compute consecutive log returns and discard the initial missing row."""
+    """Compute the thesis one-minute log returns.
+
+    Implements ``r_{j,t} = log(P_{j,t} / P_{j,t-1})`` (``eq:log-return``).
+    The first row is discarded because no preceding price is available.
+    """
     return np.log(prices).diff().iloc[1:]

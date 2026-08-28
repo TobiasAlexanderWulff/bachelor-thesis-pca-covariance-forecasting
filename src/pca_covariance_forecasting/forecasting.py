@@ -20,19 +20,12 @@ OPTIMIZATION_MAX_ITERATIONS = 200
 def prepare_whittle_inputs(
     values: np.ndarray,
 ) -> tuple[float, np.ndarray, np.ndarray]:
-    """Center a training series and construct its Whittle inputs.
+    """Construct the centred inputs for the thesis Whittle estimate.
 
-    Parameters
-    ----------
-    values:
-        One-dimensional training observations in chronological order.
-
-    Returns
-    -------
-    tuple
-        The training-sample mean, the periodogram evaluated at the positive
-        Fourier frequencies, and ``log(2 sin(omega / 2))`` at those
-        frequencies. The latter is reused across candidate values of ``d``.
+    At positive frequencies ``ω_j = 2πj/n``, the periodogram is
+    ``I(ω_j) = |sum_t (z_t-z_bar) exp(-i t ω_j)|² / (2πn)``
+    (``eq:periodogram``). The returned log-frequency factor is reused when
+    evaluating candidate values of ``d``.
     """
     values = np.asarray(values, dtype=float)
 
@@ -110,10 +103,12 @@ def evaluate_profile_whittle_objective(
 ) -> tuple[float, float]:
     """Evaluate the profiled ARFIMA(0, d, 0) Whittle criterion.
 
-    The innovation variance is profiled out for the supplied candidate ``d``.
-    The returned tuple contains the objective value and the corresponding
-    innovation-variance estimate. Invalid non-positive scales produce
-    ``(inf, nan)`` so they cannot be selected by the optimizer.
+    For ``g_d(ω) = [2 sin(ω/2)]^(-2d)``
+    (``eq:arfima-spectral-shape``), this computes
+    ``σ²_hat(d) = 2π mean(I/g_d)`` and
+    ``Q_n(d) = m log(σ²_hat(d)) + sum_j log(g_d(ω_j))``. These are the thesis
+    equations ``eq:profiled-innovation-variance`` and
+    ``eq:profile-whittle-objective``.
     """
     log_spectral_shape = (
         -2.0
@@ -156,10 +151,9 @@ def refine_bounded_minimum(
 ) -> tuple[float, int]:
     """Refine a bracketed one-dimensional minimum by golden-section search.
 
-    ``objective`` is assumed to be unimodal on the closed interval. The search
-    stops when the interval is narrower than ``OPTIMIZATION_TOLERANCE`` or the
-    iteration limit is reached. The midpoint estimate and iteration count are
-    returned.
+    This is the numerical refinement described in the thesis, not an added
+    statistical model assumption. The interval-width tolerance and iteration
+    cap are the fixed implementation choices defined above.
     """
     if not lower_bound < upper_bound:
         raise ValueError(
@@ -226,14 +220,12 @@ def refine_bounded_minimum(
 def fit_arfima_0d0_whittle(
     values: np.ndarray,
 ) -> dict[str, float | bool | int]:
-    """Fit the retained ARFIMA(0, d, 0) Profile-Whittle specification.
+    """Fit the thesis ARFIMA(0, d, 0) Profile-Whittle specification.
 
-    The location estimate is the training-sample mean. The objective is first
-    evaluated on the fixed grid from -0.49 to 0.49. The best grid point and its
-    immediate neighbours define the interval refined by golden-section search.
-    Returned diagnostics include ``mean``, ``d``, innovation variance,
-    objective value, frequency count, grid estimate, refinement iterations,
-    and distance from the admissible search boundary.
+    The location is ``μ_hat = z_bar``. Equation
+    ``d_hat = argmin Q_n(d)`` (``eq:profile-whittle-estimate``) is implemented
+    on ``[-0.49, 0.49]`` by a 0.001 grid followed by golden-section refinement
+    between the neighbouring grid points.
     """
     (
         mean,
@@ -323,10 +315,11 @@ def fractional_differencing_weights(
     fractional_parameter: float,
     count: int,
 ) -> np.ndarray:
-    """Return ``count`` coefficients of the fractional-difference expansion.
+    """Generate the thesis fractional-differencing coefficients ``π_k(d)``.
 
-    Coefficients are generated recursively from ``pi_0 = 1`` according to the
-    ARFIMA(0, d, 0) convention used by the forecast recursion.
+    Implements ``π_0(d)=1`` and
+    ``π_k(d)=π_{k-1}(d)(k-1-d)/k`` (``eq:fractional-weights``), the recursive
+    form of ``(1-L)^d`` used by the point forecast.
     """
     if not np.isfinite(fractional_parameter):
         raise ValueError(
@@ -361,25 +354,13 @@ def forecast_arfima_0d0_one_step(
     fractional_parameter: float,
     mean: float,
 ) -> np.ndarray:
-    """Compute finite-history one-step ARFIMA(0, d, 0) forecasts.
+    """Compute the implemented ARFIMA one-step point forecast.
 
-    Parameters
-    ----------
-    observed_values:
-        Full observed series, including holdout values that become known before
-        later forecast origins.
-    forecast_positions:
-        Integer target positions. Only observations strictly before each target
-        are used.
-    fractional_parameter, mean:
-        Training-estimated parameters held fixed across all forecast origins.
-
-    Returns
-    -------
-    numpy.ndarray
-        Forecasts in the same order as ``forecast_positions``. The theoretical
-        infinite recursion is truncated at the beginning of the observed sample;
-        no pre-sample values are imputed.
+    Starting from ``(1-L)^d(z_t-μ)=ε_t`` (``eq:arfima-process``), this
+    implements ``z_hat[t+1|t] = μ_hat - sum_{k=1}^t π_k(d_hat)
+    (z[t+1-k]-μ_hat)`` (``eq:arfima-one-step-recursion``). Each target uses all
+    available earlier observations; the infinite recursion is truncated at the
+    sample start and no unknown pre-sample values are imputed.
     """
     observed_values = np.asarray(
         observed_values,
@@ -464,12 +445,11 @@ def fit_and_forecast_arfima_0d0_holdout(
     pd.Series,
     dict[str, float | bool | int],
 ]:
-    """Fit on the training slice and forecast every holdout origin once.
+    """Fit once on training and forecast the chronological holdout.
 
-    Model parameters are estimated only from the first
-    ``training_observation_count`` values. The observed history expands after
-    each holdout realization, while the fitted parameters remain fixed. The
-    forecast series and complete fit-diagnostic dictionary are returned.
+    This implements the thesis rolling one-step information set: observed
+    history expands after each holdout realization, while ``μ_hat``, ``d_hat``,
+    and the fitted innovation variance remain fixed at their training estimates.
     """
     if not series.index.is_unique:
         raise ValueError(
@@ -540,12 +520,12 @@ def construct_dominant_indicator_covariance_forecasts(
     reference_basis: pd.DataFrame,
     reference_eigenvalues: pd.Series,
 ) -> pd.DataFrame:
-    """Map scalar indicator forecasts through the fixed-remainder PCA model.
+    """Map indicator forecasts through the thesis fixed-basis reconstruction.
 
-    The first transformed diagonal element is replaced by each forecast. All
-    remaining diagonal elements stay at their training-reference eigenvalues,
-    and transformed off-diagonal elements are zero before reconstruction in the
-    original asset coordinates.
+    Implements ``Σ_hat[t+1|t] = V diag(z_hat[t+1|t], λ_2,...,λ_p) V^T``
+    (``eq:one-indicator-covariance-forecast``). ``z_hat`` may follow either
+    persistence ``z_hat[t+1|t] = z_t`` (``eq:naive-indicator``) or ARFIMA; the
+    basis and remaining eigenvalues are fixed training estimates.
     """
     if dominant_indicator_forecasts.empty:
         raise ValueError(
@@ -647,7 +627,12 @@ def construct_direct_naive_covariance_forecasts(
     covariance_matrices: pd.DataFrame,
     training_observation_count: int,
 ) -> pd.DataFrame:
-    """Use the most recently observed covariance as each holdout forecast."""
+    """Construct the thesis direct covariance-persistence benchmark.
+
+    Implements ``Σ_hat[t+1|t] = Σ_t``
+    (``eq:direct-covariance-persistence``) with identical holdout target
+    alignment to the indicator-based forecasts.
+    """
     if covariance_matrices.empty:
         raise ValueError(
             "At least one covariance matrix is required."
