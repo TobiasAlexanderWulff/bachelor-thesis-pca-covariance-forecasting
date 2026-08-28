@@ -217,7 +217,6 @@ def save_figure(
     """Save one figure as a high-resolution raster and two vector files."""
     output_directory.mkdir(parents=True, exist_ok=True)
     saved_paths = []
-
     for extension in ("png", "pdf", "svg"):
         output_path = output_directory / f"{stem}.{extension}"
         save_arguments = {"format": extension}
@@ -575,7 +574,7 @@ def plot_covariance_rmse_reduction(
         f"{holdout_count:,} matrices",
     )
     ax.set_xlabel("RMSE reduction (%)")
-    ax.set_ylabel("Covariance-matrix component")
+    ax.set_ylabel("Error category")
     ax.grid(axis="x", color=GRID, linewidth=0.7)
     ax.spines[["top", "right"]].set_visible(False)
     ax.legend(loc="upper left", ncols=2)
