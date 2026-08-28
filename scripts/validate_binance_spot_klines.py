@@ -40,6 +40,7 @@ ONE_MINUTE_MS = 60_000
 
 
 def verify_checksum(archive_path: Path) -> None:
+    """Verify one downloaded archive against its Binance SHA-256 sidecar."""
     checksum_path = Path(f"{archive_path}.CHECKSUM")
     expected_hash, expected_filename = checksum_path.read_text().split()
 
@@ -58,6 +59,7 @@ def validate_archive(
     month: str,
     config: ExperimentConfig,
 ) -> None:
+    """Validate file identity, schema, coverage, continuity, and OHLC prices."""
     archive_name = f"{symbol}-{config.interval}-{month}.zip"
     csv_name = f"{symbol}-{config.interval}-{month}.csv"
     archive_path = DATA_DIRECTORY / archive_name
@@ -129,6 +131,7 @@ def validate_archive(
 
 
 def main() -> None:
+    """Validate every configured monthly archive before empirical analysis."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     arguments = parser.parse_args()

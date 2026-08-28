@@ -17,6 +17,13 @@ DEFAULT_CONFIG_PATH = (
 
 
 def main() -> None:
+    """Download every archive and checksum named by the experiment config.
+
+    Files are retrieved from the official Binance Public Data archive and
+    written to the fixed local raw-data directory used by the retained pipeline.
+    Integrity and structural checks are performed separately by
+    ``validate_binance_spot_klines.py``.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     arguments = parser.parse_args()

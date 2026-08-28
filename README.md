@@ -21,11 +21,12 @@ All commands below are run from the repository root with the locked environment.
 
 ## Data
 
-The experiment configuration is stored in
-`config/experiments/2024_full_year.yaml`. It identifies the symbols, interval,
-months, official Binance archive base URL, and local data directory. Downloaded
-archives and checksum sidecars are stored under `data/raw/binance/` and are
-excluded from Git.
+The tracked data-construction settings are stored in
+`config/experiments/2024_full_year.yaml`. They identify the symbols, sampling
+interval, months, and covariance-block length. The official Binance archive URL
+is fixed in the download script, while all retained entry points use
+`data/raw/binance/` as the local data directory. Downloaded archives and
+checksum sidecars are excluded from Git.
 
 Download the exact monthly archives and their official checksum sidecars:
 
@@ -54,6 +55,12 @@ uv run python scripts/analyze_covariance_forecasts.py
 The command reports the chronological split, reference-PCA shares,
 single-indicator approximation errors, Profile-Whittle estimate, covariance
 RMSE comparison, and positive-semidefiniteness diagnostics.
+
+The retained study design uses the first 8,783 covariance matrices for training
+and the remaining 8,784 matrices as a chronological holdout. This fixed split is
+declared as `TRAINING_OBSERVATION_COUNT` in both retained entry-point scripts and
+in the reproduction notebook. It is deliberately not inferred from the data or
+changed during execution.
 
 Generate the complete thesis figure set and supporting CSV tables:
 
@@ -125,3 +132,22 @@ uv.lock               Complete locked dependency resolution
 The scripts and notebook import the package modules instead of duplicating the
 analysis logic. The package modules and tests therefore remain the single
 implementation and verification basis for both reproduction paths.
+
+## Scope and source traceability
+
+The retained thesis evidence is produced by
+`scripts/analyze_covariance_forecasts.py`,
+`scripts/generate_thesis_figures.py`, and
+`notebooks/reproduce_thesis_results.ipynb`. Mathematical docstrings in
+`src/pca_covariance_forecasting/` refer to the corresponding LaTeX equation
+labels in the thesis manuscript. The exact code revision used for submission
+should be recorded with the submitted package so that these references remain
+version-specific.
+
+`analyze_dominant_indicator_arfima.py` is an earlier, broader diagnostic script.
+It includes additional benchmarks and stability diagnostics that are not part
+of the retained thesis comparison. It is kept for development history and must
+not be used as the source of reported thesis results. Likewise,
+`bachelor-thesis-kb/` contains development notes rather than an executable or
+authoritative result specification. Exploratory residual analyses are isolated
+under `archive/`.

@@ -1,4 +1,10 @@
-"""Evaluate one-step forecasts of the dominant PCA reference component.
+"""Run an earlier broad diagnostic of the dominant PCA reference component.
+
+This development-history script is not the retained thesis analysis. It
+contains additional diagnostic benchmarks and stability checks that are not
+part of the reported comparison. Reproduce the thesis results with
+``scripts/analyze_covariance_forecasts.py`` or
+``notebooks/reproduce_thesis_results.ipynb`` instead.
 
 The fixed PCA reference basis is estimated exclusively from the outer training
 covariance matrices.  The dominant transformed component
