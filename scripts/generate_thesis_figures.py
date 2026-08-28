@@ -669,7 +669,7 @@ def plot_cumulative_loss_difference(
     style_time_axis(ax)
     add_source_note(
         fig,
-        "Descriptive holdout diagnostic only; it is not a significance "
+        "Descriptive holdout diagnostic only. This is not a significance "
         "test and does not establish a causal explanation.",
     )
 
