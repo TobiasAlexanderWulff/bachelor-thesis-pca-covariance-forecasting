@@ -463,7 +463,7 @@ def plot_approximation_error_distributions(
     )
     add_subtitle(
         ax,
-        "Relative Frobenius error; logarithmic horizontal axis",
+        "Relative Frobenius error on a logarithmic horizontal axis",
     )
     ax.set_xlabel("Relative Frobenius error (%)")
     ax.set_ylabel("Cumulative share of intervals (%)")
