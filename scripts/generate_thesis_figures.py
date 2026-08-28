@@ -582,7 +582,7 @@ def plot_covariance_rmse_reduction(
     add_source_note(
         fig,
         "Benchmark: direct one-step covariance carry-forward. "
-        "Values are descriptive for the investigated portfolio and period.",
+        "Values are descriptive for the investigated asset universe and period.",
     )
 
     return save_figure(
