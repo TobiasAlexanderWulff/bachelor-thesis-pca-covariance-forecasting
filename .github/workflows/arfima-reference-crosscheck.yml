@@ -1,0 +1,85 @@
+name: ARFIMA reference cross-check
+
+on:
+  push:
+    branches:
+      - validation/arfima-whittle-crosscheck
+  workflow_dispatch:
+
+jobs:
+  crosscheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out validation branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . scipy
+
+      - name: Reconstruct training series and run independent Python estimators
+        run: |
+          python validation/arfima_reference_crosscheck.py --output-dir validation_output
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install CRAN fracdiff
+        run: |
+          Rscript -e 'install.packages("fracdiff", repos="https://cloud.r-project.org")'
+
+      - name: Fit independent CRAN fracdiff ARFIMA(0,d,0)
+        run: |
+          Rscript - <<'RS'
+          suppressPackageStartupMessages(library(fracdiff))
+          frame <- read.csv("validation_output/training_dominant_indicator.csv")
+          x <- frame$dominant_indicator
+          x <- x - mean(x)
+          fit <- fracdiff(x, nar = 0, nma = 0, drange = c(0, 0.49), trace = 0)
+          cat(sprintf("CRAN fracdiff d = %.12f\n", fit$d))
+          writeLines(
+            sprintf('{"d": %.12f, "n": %d}', fit$d, length(x)),
+            "validation_output/cran_fracdiff_crosscheck.json"
+          )
+          capture.output(str(fit), file = "validation_output/cran_fracdiff_fit_structure.txt")
+          RS
+
+      - name: Print consolidated comparison
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          python_result = json.loads(Path("validation_output/python_crosscheck.json").read_text())
+          cran_result = json.loads(Path("validation_output/cran_fracdiff_crosscheck.json").read_text())
+          repo_d = python_result["repository_profile_whittle"]["d"]
+          independent_d = python_result["independent_same_objective_scipy"]["d"]
+          cran_d = cran_result["d"]
+
+          print("=== ARFIMA d cross-check ===")
+          print(f"Repository profile Whittle : {repo_d:.12f}")
+          print(f"Independent same objective : {independent_d:.12f}")
+          print(f"Absolute difference         : {abs(repo_d-independent_d):.3e}")
+          print(f"CRAN fracdiff approx. ML    : {cran_d:.12f}")
+          print(f"Difference vs repo Whittle  : {cran_d-repo_d:+.6f}")
+          print("GPH estimates               :", python_result["gph_bandwidth_exponent"])
+          print("Local-Whittle estimates     :", python_result["local_whittle_bandwidth_exponent"])
+          print("Data summary                :", python_result["data"])
+          PY
+
+      - name: Upload validation outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: arfima-reference-crosscheck
+          path: validation_output/
+          if-no-files-found: error
